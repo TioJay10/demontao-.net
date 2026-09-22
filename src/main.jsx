@@ -560,15 +560,18 @@ function HomePage({ onLogin }) {
   const [catalogs, setCatalogs] = useState([]);
   const [products, setProducts] = useState([]);
   const [query, setQuery] = useState('');
+  const [loadError, setLoadError] = useState('');
   const [loading, setLoading] = useState(true);
   const [category, setCategory] = useState('all');
 
   useEffect(() => {
     const load = async () => {
-      const [{ data: catalogData }, { data: productData }] = await Promise.all([
+      setLoadError('');
+      const [{ data: catalogData, error: catalogError }, { data: productData, error: productError }] = await Promise.all([
         supabase.from('catalogs').select('id,slug,company_name,description,logo_url,address,business_category,is_active,created_at').eq('is_active', true).order('created_at', { ascending: false }),
         supabase.from('products').select('id,catalog_id,name,description,status').eq('status', 'active')
       ]);
+      if (catalogError || productError) setLoadError(catalogError?.message || productError?.message || 'Não foi possível carregar os catálogos.');
       setCatalogs(catalogData || []);
       setProducts(productData || []);
       setLoading(false);
@@ -591,6 +594,9 @@ function HomePage({ onLogin }) {
   }
 
   const categories = ['all','Alimentação','Moda','Beleza','Casa','Serviços','Eventos','Tecnologia','Saúde','Educação','Automotivo','Outros'];
+  const showRecent = !q && category === 'all';
+  const recentCatalogs = showRecent ? catalogs.slice(0, 3) : [];
+  const recentIds = new Set(recentCatalogs.map(c => c.id));
 
   const filtered = catalogs.filter(c => {
     if (showRecent && recentIds.has(c.id)) return false;
@@ -600,10 +606,6 @@ function HomePage({ onLogin }) {
       (c.address || '').toLowerCase().includes(q) ||
       matchingProductsByCatalog.has(c.id));
   });
-
-  const showRecent = !q && category === 'all';
-  const recentCatalogs = showRecent ? catalogs.slice(0, 3) : [];
-  const recentIds = new Set(recentCatalogs.map(c => c.id));
   const categoryCounts = categories.slice(1).reduce((acc, item) => {
     acc[item] = catalogs.filter(c => c.business_category === item).length;
     return acc;
@@ -669,7 +671,7 @@ function HomePage({ onLogin }) {
         ))}
       </div>
 
-      {loading ? <div className="empty-state"><h3>Carregando catálogos...</h3></div> : <>
+      {loading ? <div className="empty-state"><h3>Carregando catálogos...</h3></div> : loadError ? <div className="empty-state"><h3>Não foi possível carregar os catálogos.</h3><p>{loadError}</p></div> : <>
         {showRecent && recentCatalogs.length > 0 && (
           <section className="home-subsection">
             <div className="home-subsection-heading">
