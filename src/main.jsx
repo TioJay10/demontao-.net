@@ -586,6 +586,7 @@ function HomePage({ onLogin }) {
   const categories = ['all','Alimentação','Moda','Beleza','Casa','Serviços','Eventos','Tecnologia','Saúde','Educação','Automotivo','Outros'];
 
   const filtered = catalogs.filter(c => {
+    if (showRecent && recentIds.has(c.id)) return false;
     return (category === 'all' || c.business_category === category) && (!q ||
       (c.company_name || '').toLowerCase().includes(q) ||
       (c.description || '').toLowerCase().includes(q) ||
