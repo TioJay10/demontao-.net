@@ -378,13 +378,14 @@ function OwnerDashboard({ user, catalog, onLogout }) {
           </form>
         </article>
         <article className="panel"><span className="eyebrow">CADASTRADOS</span><h2>{products.length} item(ns)</h2><div className="item-list">{products.length===0?<p className="muted">Nenhum produto ou serviço cadastrado.</p>:products.map(item=><div className="catalog-item product-row" key={item.id}><div><strong>{item.name}</strong><span>{item.price != null ? `R$ ${Number(item.price).toFixed(2).replace('.', ',')}` : 'Preço não informado'} · {item.status==='active'?'Ativo':item.status==='inactive'?'Inativo':'Sem estoque'}</span></div><div className="row-actions"><button className="secondary-button" onClick={()=>editProduct(item)}>Editar</button><button className="danger-button" onClick={()=>deleteProduct(item.id)}>Excluir</button></div></div>)}</div></article>
+      </div>}
       {tab === 'orders' && <article className="panel orders-panel">
         <span className="eyebrow">VENDAS</span><h2>Pedidos recebidos</h2>
         {catalogError && <div className="form-message">{catalogError}</div>}
         {orders.length === 0 ? <p className="muted">Nenhum pedido recebido ainda.</p> : <div className="orders-list">
           {orders.map(order => <div className="order-card" key={order.id}>
             <div className="order-head"><div><strong>Pedido #{order.id.slice(0,8)}</strong><span>{new Date(order.created_at).toLocaleString('pt-BR')}</span></div><strong>R$ {Number(order.total || 0).toFixed(2).replace('.', ',')}</strong></div>
-            <div className="order-customer"><strong>{order.customer_name}</strong><span>{order.customer_phone}</span>{order.address && <span>{order.customer_address}</span>}</div>
+            <div className="order-customer"><strong>{order.customer_name}</strong><span>{order.customer_phone}</span>{order.customer_address && <span>{order.customer_address}</span>}</div>
             <div className="order-items">{(order.order_items || []).map((item, i) => <div key={i}><span>{item.quantity}× {item.product_name}</span><strong>R$ {(Number(item.unit_price||0)*item.quantity).toFixed(2).replace('.', ',')}</strong></div>)}</div>
             {order.notes && <p className="order-notes"><strong>Obs.:</strong> {order.notes}</p>}
             <div className="order-actions"><select value={order.status} onChange={e=>updateOrderStatus(order.id,e.target.value)}><option value="new">Novo</option><option value="in_analysis">Em análise</option><option value="confirmed">Confirmado</option><option value="completed">Concluído</option><option value="cancelled">Cancelado</option></select>{order.status === 'confirmed' && <button className="secondary-button" onClick={()=>setReceiptOrder(order)}>Ver comprovante</button>}</div>
@@ -415,7 +416,6 @@ function OwnerDashboard({ user, catalog, onLogout }) {
           <button className="primary-button" disabled={saving}>{saving ? 'Salvando...' : 'Salvar personalização'}</button>
         </form>
       </article>}
-      </div>}
     {receiptOrder && <div className="modal-backdrop" onClick={()=>setReceiptOrder(null)}><section className="receipt-modal" onClick={e=>e.stopPropagation()}>
         <button className="modal-close" onClick={()=>setReceiptOrder(null)}>×</button>
         <div className="receipt" id="receipt">
@@ -424,7 +424,7 @@ function OwnerDashboard({ user, catalog, onLogout }) {
           <span className="eyebrow">COMPROVANTE DE PEDIDO</span>
           <h2>Pedido #{receiptOrder.id.slice(0,8)}</h2>
           <p className="receipt-date">{new Date(receiptOrder.created_at).toLocaleString('pt-BR')}</p>
-          <div className="receipt-section"><strong>Cliente</strong><span>{receiptOrder.customer_name}</span><span>{receiptOrder.customer_phone}</span>{receiptOrder.address && <span>{receiptOrder.customer_address}</span>}</div>
+          <div className="receipt-section"><strong>Cliente</strong><span>{receiptOrder.customer_name}</span><span>{receiptOrder.customer_phone}</span>{receiptOrder.customer_address && <span>{receiptOrder.customer_address}</span>}</div>
           <div className="receipt-items">{(receiptOrder.order_items || []).map((item,i)=><div key={i}><span>{item.quantity}× {item.product_name}</span><strong>R$ {(Number(item.unit_price||0)*item.quantity).toFixed(2).replace('.', ',')}</strong></div>)}</div>
           <div className="receipt-total"><span>Total</span><strong>R$ {Number(receiptOrder.total||0).toFixed(2).replace('.', ',')}</strong></div>
           <div className="receipt-section"><strong>Pagamento</strong><span>{receiptOrder.payment_method || 'A combinar'}</span>{receiptOrder.notes && <><strong>Observações</strong><span>{receiptOrder.notes}</span></>}</div>
