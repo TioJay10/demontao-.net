@@ -530,18 +530,35 @@ function PublicCatalog({ slug }) {
 
 function HomePage({ onLogin }) {
   const [catalogs, setCatalogs] = useState([]);
+  const [products, setProducts] = useState([]);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.from('catalogs').select('id,slug,company_name,description,logo_url,address,is_active')
-      .eq('is_active', true).order('created_at', { ascending: false })
-      .then(({ data }) => { setCatalogs(data || []); setLoading(false); });
+    const load = async () => {
+      const [{ data: catalogData }, { data: productData }] = await Promise.all([
+        supabase.from('catalogs').select('id,slug,company_name,description,logo_url,address,is_active').eq('is_active', true).order('created_at', { ascending: false }),
+        supabase.from('products').select('id,catalog_id,name,description,status').eq('status', 'active')
+      ]);
+      setCatalogs(catalogData || []);
+      setProducts(productData || []);
+      setLoading(false);
+    };
+    load();
   }, []);
+
+  const productCatalogIds = new Set(products.filter(p => {
+    const q = query.trim().toLowerCase();
+    return q && ((p.name || '').toLowerCase().includes(q) || (p.description || '').toLowerCase().includes(q));
+  }).map(p => p.catalog_id));
 
   const filtered = catalogs.filter(c => {
     const q = query.trim().toLowerCase();
-    return !q || c.company_name.toLowerCase().includes(q) || (c.description || '').toLowerCase().includes(q) || (c.address || '').toLowerCase().includes(q);
+    return !q ||
+      (c.company_name || '').toLowerCase().includes(q) ||
+      (c.description || '').toLowerCase().includes(q) ||
+      (c.address || '').toLowerCase().includes(q) ||
+      productCatalogIds.has(c.id);
   });
 
   return <main className="app">
@@ -552,15 +569,15 @@ function HomePage({ onLogin }) {
       </div>
       <div className="home-hero-card"><strong>DEMONTAO.NET</strong><span>Seu catálogo. Seu negócio. Seu cliente.</span></div>
     </section>
-    <section className="content home-content"><div className="section-heading"><div><span className="eyebrow">EXPLORAR</span><h2>Catálogos disponíveis</h2></div><span className="catalog-count">{filtered.length} {filtered.length === 1 ? 'catálogo' : 'catálogos'}</span></div>
+    <section className="content home-content">
+      <div className="section-heading"><div><span className="eyebrow">EXPLORAR</span><h2>{query.trim() ? 'Resultados da busca' : 'Catálogos disponíveis'}</h2></div><span className="catalog-count">{filtered.length} {filtered.length === 1 ? 'catálogo' : 'catálogos'}</span></div>
       {loading ? <div className="empty-state"><h3>Carregando catálogos...</h3></div> : filtered.length ? <div className="catalog-grid">{filtered.map(c => <a className="catalog-card" key={c.id} href={'/' + c.slug}>
         <div className="catalog-card-logo">{c.logo_url ? <img src={c.logo_url} alt="" /> : <span>{c.company_name?.charAt(0).toUpperCase()}</span>}</div>
         <div className="catalog-card-body"><h3>{c.company_name}</h3><p>{c.description || 'Confira produtos e serviços.'}</p>{c.address && <small>{c.address}</small>}<span className="catalog-card-link">Ver catálogo →</span></div>
-      </a>)}</div> : <div className="empty-state"><div className="empty-icon">⌕</div><h3>Nenhum catálogo encontrado</h3><p>Tente buscar pelo nome da empresa ou localização.</p></div>}
+      </a>)}</div> : <div className="empty-state"><div className="empty-icon">⌕</div><h3>Nenhum resultado encontrado</h3><p>Tente outro nome, produto, serviço ou localização.</p></div>}
     </section>
   </main>;
 }
-
 function App() {
   const [view, setView] = useState(window.location.pathname !== '/' ? 'public' : 'home');
   const [publicSlug] = useState(window.location.pathname !== '/' ? window.location.pathname.split('/').filter(Boolean)[0] : '');
