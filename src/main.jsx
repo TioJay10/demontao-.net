@@ -105,7 +105,12 @@ function OwnerDashboard({ user, catalog, onLogout }) {
   const [categories, setCategories] = useState([]);
   const [products, setProducts] = useState([]);
   const [categoryName, setCategoryName] = useState('');
-  const [productForm, setProductForm] = useState({ name: '', description: '', price: '', stock: '', category_id: '', status: 'active' });
+  const emptyProductForm = { name: '', description: '', price: '', stock: '', category_id: '', status: 'active' };
+  const [productForm, setProductForm] = useState(emptyProductForm);
+  const [editingProduct, setEditingProduct] = useState(null);
+  const [productImage, setProductImage] = useState(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [settings, setSettings] = useState({ company_name: catalog?.company_name || '', description: catalog?.description || '', whatsapp: catalog?.whatsapp || '', address: catalog?.address || '', hours: catalog?.hours || '', instagram_url: catalog?.instagram_url || '', facebook_url: catalog?.facebook_url || '', primary_color: catalog?.primary_color || '#111827', secondary_color: catalog?.secondary_color || '#6b7280', background_color: catalog?.background_color || '#f7f7f5', button_color: catalog?.button_color || '#111827', theme: catalog?.theme || 'Minimalista', logo_url: catalog?.logo_url || '', cover_url: catalog?.cover_url || '' });
   const [savingItem, setSavingItem] = useState(false);
   const [catalogError, setCatalogError] = useState('');
 
@@ -113,7 +118,7 @@ function OwnerDashboard({ user, catalog, onLogout }) {
     if (!catalog?.id || !supabase) return;
     Promise.all([
       supabase.from('categories').select('*').eq('catalog_id', catalog.id).order('sort_order').order('created_at'),
-      supabase.from('products').select('*').eq('catalog_id', catalog.id).order('created_at', { ascending: false })
+      supabase.from('products').select('*, product_images(*)').eq('catalog_id', catalog.id).order('created_at', { ascending: false })
     ]).then(([cats, prods]) => {
       if (cats.error) setCatalogError(cats.error.message); else setCategories(cats.data || []);
       if (prods.error) setCatalogError(prods.error.message); else setProducts(prods.data || []);
@@ -132,7 +137,7 @@ function OwnerDashboard({ user, catalog, onLogout }) {
     setSavingItem(false);
   };
 
-  const addProduct = async (event) => {
+  const saveProduct = async (event) => {
     event.preventDefault();
     if (!productForm.name.trim()) return;
     setSavingItem(true); setCatalogError('');
@@ -145,13 +150,97 @@ function OwnerDashboard({ user, catalog, onLogout }) {
       stock: productForm.stock === '' ? null : Number(productForm.stock),
       status: productForm.status
     };
-    const { data, error } = await supabase.from('products').insert(payload).select('*').single();
+    const query = editingProduct
+      ? supabase.from('products').update(payload).eq('id', editingProduct.id).select('*').single()
+      : supabase.from('products').insert(payload).select('*').single();
+    const { data, error } = await query;
     if (error) setCatalogError(error.message);
     else {
-      setProducts([data, ...products]);
-      setProductForm({ name:'', description:'', price:'', stock:'', category_id:'', status:'active' });
+      if (editingProduct) setProducts(products.map(item => item.id === data.id ? { ...data, product_images: item.product_images || [] } : item));
+      else setProducts([{ ...data, product_images: [] }, ...products]);
+      setProductForm(emptyProductForm);
+      setEditingProduct(null);
+      setProductImage(null);
     }
     setSavingItem(false);
+  };
+
+  const editProduct = (item) => {
+    setEditingProduct(item);
+    setProductForm({
+      name: item.name || '',
+      description: item.description || '',
+      price: item.price ?? '',
+      stock: item.stock ?? '',
+      category_id: item.category_id || '',
+      status: item.status || 'active'
+    });
+    setProductImage(null);
+    setCatalogError('');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const cancelEdit = () => {
+    setEditingProduct(null);
+    setProductForm(emptyProductForm);
+    setProductImage(null);
+    setCatalogError('');
+  };
+
+  const uploadProductImage = async () => {
+    if (!editingProduct || !productImage) return;
+    setUploadingImage(true); setCatalogError('');
+    try {
+      const ext = productImage.name.split('.').pop()?.toLowerCase() || 'jpg';
+      const path = `${catalog.id}/products/${editingProduct.id}/${crypto.randomUUID()}.${ext}`;
+      const { error: uploadError } = await supabase.storage.from('catalog-images').upload(path, productImage, { contentType: productImage.type, upsert: false });
+      if (uploadError) throw uploadError;
+      const { data: publicData } = supabase.storage.from('catalog-images').getPublicUrl(path);
+      const { data: imageRow, error: imageError } = await supabase.from('product_images').insert({ product_id: editingProduct.id, image_url: publicData.publicUrl, sort_order: (editingProduct.product_images || []).length }).select('*').single();
+      if (imageError) throw imageError;
+      setProducts(products.map(item => item.id === editingProduct.id ? { ...item, product_images: [...(item.product_images || []), imageRow] } : item));
+      setEditingProduct({ ...editingProduct, product_images: [...(editingProduct.product_images || []), imageRow] });
+      setProductImage(null);
+    } catch (error) {
+      setCatalogError(error.message || 'Não foi possível enviar a imagem.');
+    } finally { setUploadingImage(false); }
+  };
+
+  const deleteProductImage = async (image) => {
+    const { error } = await supabase.from('product_images').delete().eq('id', image.id);
+    if (error) return setCatalogError(error.message);
+    const pathMarker = '/catalog-images/';
+    const idx = image.image_url?.indexOf(pathMarker);
+    if (idx >= 0) {
+      const path = image.image_url.slice(idx + pathMarker.length).split('?')[0];
+      await supabase.storage.from('catalog-images').remove([path]);
+    }
+    const nextImages = (editingProduct?.product_images || []).filter(item => item.id !== image.id);
+    setEditingProduct(editingProduct ? { ...editingProduct, product_images: nextImages } : editingProduct);
+    setProducts(products.map(item => item.id === image.product_id ? { ...item, product_images: nextImages } : item));
+  };
+
+  const saveCatalogSettings = async (event) => {
+    event.preventDefault(); setSaving(true); setMessage('');
+    const payload = {
+      company_name: settings.company_name.trim() || 'Meu catálogo',
+      description: settings.description.trim() || null,
+      whatsapp: settings.whatsapp.trim() || null,
+      address: settings.address.trim() || null,
+      hours: settings.hours.trim() || null,
+      instagram_url: settings.instagram_url.trim() || null,
+      facebook_url: settings.facebook_url.trim() || null,
+      primary_color: settings.primary_color,
+      secondary_color: settings.secondary_color,
+      background_color: settings.background_color,
+      button_color: settings.button_color,
+      theme: settings.theme,
+      updated_at: new Date().toISOString()
+    };
+    const { data, error } = await supabase.from('catalogs').update(payload).eq('id', currentCatalog.id).select('*').single();
+    if (error) setMessage(error.message);
+    else { setCurrentCatalog(data); setSettings({ ...settings, ...data }); setMessage('Personalização salva.'); }
+    setSaving(false);
   };
 
   const deleteCategory = async (id) => {
@@ -169,6 +258,7 @@ function OwnerDashboard({ user, catalog, onLogout }) {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [companyName, setCompanyName] = useState(catalog?.company_name || '');
+  useEffect(() => { if (catalog) { setCurrentCatalog(catalog); setCompanyName(catalog.company_name || ''); setSettings(prev => ({...prev, ...catalog, company_name: catalog.company_name || ''})); } }, [catalog]);
 
   const save = async (event) => {
     event.preventDefault(); setSaving(true); setMessage('');
@@ -190,6 +280,7 @@ function OwnerDashboard({ user, catalog, onLogout }) {
         <button className={tab==='overview'?'nav-item active':'nav-item'} onClick={()=>setTab('overview')}>Visão geral</button>
         <button className={tab==='categories'?'nav-item active':'nav-item'} onClick={()=>setTab('categories')}>Categorias</button>
         <button className={tab==='products'?'nav-item active':'nav-item'} onClick={()=>setTab('products')}>Produtos e serviços</button>
+        <button className={tab==='customize'?'nav-item active':'nav-item'} onClick={()=>setTab('customize')}>Personalizar catálogo</button>
       </nav>
       <div className="dashboard-intro"><span className="eyebrow">OLÁ</span><h1>{currentCatalog.company_name || 'Meu catálogo'}</h1><p>Seu painel para organizar o catálogo digital.</p></div>
       <div className="status-card"><div><strong>Status do catálogo</strong><span>{currentCatalog.is_active ? 'Ativo' : 'Aguardando ativação do plano'}</span></div><span className={currentCatalog.is_active ? 'status-dot active' : 'status-dot'}></span></div>
@@ -208,17 +299,47 @@ function OwnerDashboard({ user, catalog, onLogout }) {
         <div className="item-list">{categories.length===0 ? <p className="muted">Nenhuma categoria cadastrada.</p> : categories.map(item=><div className="catalog-item" key={item.id}><span>{item.name}</span><button className="danger-button" onClick={()=>deleteCategory(item.id)}>Excluir</button></div>)}</div>
       </article>}
       {tab === 'products' && <div className="products-manager">
-        <article className="panel"><span className="eyebrow">CATÁLOGO</span><h2>Novo produto ou serviço</h2>
+        <article className="panel"><span className="eyebrow">CATÁLOGO</span><h2>{editingProduct ? 'Editar produto ou serviço' : 'Novo produto ou serviço'}</h2>
           <form onSubmit={addProduct} className="auth-form">
             <label>Nome<input value={productForm.name} onChange={e=>setProductForm({...productForm,name:e.target.value})} placeholder="Nome do produto ou serviço" /></label>
             <label>Descrição<textarea value={productForm.description} onChange={e=>setProductForm({...productForm,description:e.target.value})} maxLength={500} placeholder="Descrição curta" /></label>
             <div className="form-two"><label>Preço<input type="number" min="0" step="0.01" value={productForm.price} onChange={e=>setProductForm({...productForm,price:e.target.value})} placeholder="0,00" /></label><label>Estoque<input type="number" min="0" step="1" value={productForm.stock} onChange={e=>setProductForm({...productForm,stock:e.target.value})} placeholder="Opcional" /></label></div>
             <label>Categoria<select value={productForm.category_id} onChange={e=>setProductForm({...productForm,category_id:e.target.value})}><option value="">Sem categoria</option>{categories.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
             <label>Status<select value={productForm.status} onChange={e=>setProductForm({...productForm,status:e.target.value})}><option value="active">Ativo</option><option value="inactive">Inativo</option><option value="out_of_stock">Sem estoque</option></select></label>
-            <button className="primary-button" disabled={savingItem}>{savingItem?'Salvando...':'Adicionar ao catálogo'}</button>
+            <div className="product-edit-actions">
+              <button className="primary-button" disabled={savingItem}>{savingItem ? 'Salvando...' : editingProduct ? 'Salvar alterações' : 'Adicionar ao catálogo'}</button>
+              {editingProduct && <button type="button" className="secondary-button" onClick={cancelEdit}>Cancelar edição</button>}
+            </div>
+            {editingProduct && <div className="image-manager">
+              <div className="image-manager-title"><strong>Fotos do produto</strong><span>JPG, PNG ou WEBP · até 5 MB</span></div>
+              <div className="image-grid">
+                {(editingProduct.product_images || []).map(image => <div className="image-thumb" key={image.id}><img src={image.image_url} alt="" /><button type="button" onClick={()=>deleteProductImage(image)}>Excluir</button></div>)}
+                {(editingProduct.product_images || []).length === 0 && <div className="image-empty">Nenhuma foto adicionada.</div>}
+              </div>
+              <div className="image-upload-row"><input type="file" accept="image/jpeg,image/png,image/webp" onChange={e=>setProductImage(e.target.files?.[0] || null)} /><button type="button" className="secondary-button" disabled={!productImage || uploadingImage} onClick={uploadProductImage}>{uploadingImage ? 'Enviando...' : 'Enviar foto'}</button></div>
+            </div>}
           </form>
         </article>
-        <article className="panel"><span className="eyebrow">CADASTRADOS</span><h2>{products.length} item(ns)</h2><div className="item-list">{products.length===0?<p className="muted">Nenhum produto ou serviço cadastrado.</p>:products.map(item=><div className="catalog-item product-row" key={item.id}><div><strong>{item.name}</strong><span>{item.price != null ? `R$ ${Number(item.price).toFixed(2).replace('.', ',')}` : 'Preço não informado'} · {item.status==='active'?'Ativo':item.status==='inactive'?'Inativo':'Sem estoque'}</span></div><button className="danger-button" onClick={()=>deleteProduct(item.id)}>Excluir</button></div>)}</div></article>
+        <article className="panel"><span className="eyebrow">CADASTRADOS</span><h2>{products.length} item(ns)</h2><div className="item-list">{products.length===0?<p className="muted">Nenhum produto ou serviço cadastrado.</p>:products.map(item=><div className="catalog-item product-row" key={item.id}><div><strong>{item.name}</strong><span>{item.price != null ? `R$ ${Number(item.price).toFixed(2).replace('.', ',')}` : 'Preço não informado'} · {item.status==='active'?'Ativo':item.status==='inactive'?'Inativo':'Sem estoque'}</span></div><div className="row-actions"><button className="secondary-button" onClick={()=>editProduct(item)}>Editar</button><button className="danger-button" onClick={()=>deleteProduct(item.id)}>Excluir</button></div></div>)}</div></article>
+      {tab === 'customize' && <article className="panel customization-panel">
+        <span className="eyebrow">IDENTIDADE</span><h2>Personalizar catálogo</h2>
+        <form onSubmit={saveCatalogSettings} className="auth-form">
+          <label>Nome da empresa<input value={settings.company_name} onChange={e=>setSettings({...settings,company_name:e.target.value})} /></label>
+          <label>Descrição<textarea value={settings.description} onChange={e=>setSettings({...settings,description:e.target.value})} maxLength={500} placeholder="Apresente sua empresa..." /></label>
+          <div className="form-two"><label>WhatsApp<input value={settings.whatsapp} onChange={e=>setSettings({...settings,whatsapp:e.target.value})} placeholder="5511999999999" /></label><label>Horário de atendimento<input value={settings.hours} onChange={e=>setSettings({...settings,hours:e.target.value})} placeholder="Seg a Sex · 9h às 18h" /></label></div>
+          <label>Endereço<input value={settings.address} onChange={e=>setSettings({...settings,address:e.target.value})} placeholder="Rua, número, bairro, cidade - UF" /></label>
+          <div className="form-two"><label>Instagram<input value={settings.instagram_url} onChange={e=>setSettings({...settings,instagram_url:e.target.value})} placeholder="https://instagram.com/..." /></label><label>Facebook<input value={settings.facebook_url} onChange={e=>setSettings({...settings,facebook_url:e.target.value})} placeholder="https://facebook.com/..." /></label></div>
+          <label>Tema<select value={settings.theme} onChange={e=>setSettings({...settings,theme:e.target.value})}><option>Minimalista</option><option>Moderno</option><option>Elegante</option><option>Colorido</option></select></label>
+          <div className="color-grid">
+            <label>Primária<input type="color" value={settings.primary_color} onChange={e=>setSettings({...settings,primary_color:e.target.value})} /></label>
+            <label>Secundária<input type="color" value={settings.secondary_color} onChange={e=>setSettings({...settings,secondary_color:e.target.value})} /></label>
+            <label>Fundo<input type="color" value={settings.background_color} onChange={e=>setSettings({...settings,background_color:e.target.value})} /></label>
+            <label>Botões<input type="color" value={settings.button_color} onChange={e=>setSettings({...settings,button_color:e.target.value})} /></label>
+          </div>
+          {message && <div className="form-message success">{message}</div>}
+          <button className="primary-button" disabled={saving}>{saving ? 'Salvando...' : 'Salvar personalização'}</button>
+        </form>
+      </article>}
       </div>}
     </section>
   </main>;
