@@ -115,6 +115,7 @@ function OwnerDashboard({ user, catalog, onLogout }) {
   const [savingItem, setSavingItem] = useState(false);
   const [catalogError, setCatalogError] = useState('');
   const [qrOpen, setQrOpen] = useState(false);
+  const [receiptOrder, setReceiptOrder] = useState(null);
 
   useEffect(() => {
     if (!catalog?.id || !supabase) return;
@@ -133,6 +134,7 @@ function OwnerDashboard({ user, catalog, onLogout }) {
     const { data, error } = await supabase.from('orders').update({ status, updated_at: new Date().toISOString() }).eq('id', id).select('*').single();
     if (error) return setCatalogError(error.message);
     setOrders(orders.map(order => order.id === id ? { ...order, ...data } : order));
+    if (status === 'confirmed') setReceiptOrder({ ...orders.find(order => order.id === id), ...data });
   };
 
   const addCategory = async (event) => {
@@ -147,7 +149,7 @@ function OwnerDashboard({ user, catalog, onLogout }) {
     setSavingItem(false);
   };
 
-  const saveProduct = async (event) => {
+  const addProduct = async (event) => {
     event.preventDefault();
     if (!productForm.name.trim()) return;
     setSavingItem(true); setCatalogError('');
@@ -346,7 +348,7 @@ function OwnerDashboard({ user, catalog, onLogout }) {
             <div className="order-customer"><strong>{order.customer_name}</strong><span>{order.phone}</span>{order.address && <span>{order.address}</span>}</div>
             <div className="order-items">{(order.order_items || []).map((item, i) => <div key={i}><span>{item.quantity}× {item.product_name}</span><strong>R$ {(Number(item.unit_price||0)*item.quantity).toFixed(2).replace('.', ',')}</strong></div>)}</div>
             {order.notes && <p className="order-notes"><strong>Obs.:</strong> {order.notes}</p>}
-            <div className="order-actions"><select value={order.status} onChange={e=>updateOrderStatus(order.id,e.target.value)}><option value="new">Novo</option><option value="in_analysis">Em análise</option><option value="confirmed">Confirmado</option><option value="completed">Concluído</option><option value="cancelled">Cancelado</option></select></div>
+            <div className="order-actions"><select value={order.status} onChange={e=>updateOrderStatus(order.id,e.target.value)}><option value="new">Novo</option><option value="in_analysis">Em análise</option><option value="confirmed">Confirmado</option><option value="completed">Concluído</option><option value="cancelled">Cancelado</option></select>{order.status === 'confirmed' && <button className="secondary-button" onClick={()=>setReceiptOrder(order)}>Ver comprovante</button>}</div>
           </div>)}
         </div>}
       </article>}
@@ -370,7 +372,22 @@ function OwnerDashboard({ user, catalog, onLogout }) {
         </form>
       </article>}
       </div>}
-    </section>
+    {receiptOrder && <div className="modal-backdrop" onClick={()=>setReceiptOrder(null)}><section className="receipt-modal" onClick={e=>e.stopPropagation()}>
+        <button className="modal-close" onClick={()=>setReceiptOrder(null)}>×</button>
+        <div className="receipt" id="receipt">
+          {currentCatalog.logo_url && <img className="receipt-logo" src={currentCatalog.logo_url} alt="" />}
+          <div className="receipt-brand">{currentCatalog.company_name || 'DEMONTAO.NET'}</div>
+          <span className="eyebrow">COMPROVANTE DE PEDIDO</span>
+          <h2>Pedido #{receiptOrder.id.slice(0,8)}</h2>
+          <p className="receipt-date">{new Date(receiptOrder.created_at).toLocaleString('pt-BR')}</p>
+          <div className="receipt-section"><strong>Cliente</strong><span>{receiptOrder.customer_name}</span><span>{receiptOrder.phone}</span>{receiptOrder.address && <span>{receiptOrder.address}</span>}</div>
+          <div className="receipt-items">{(receiptOrder.order_items || []).map((item,i)=><div key={i}><span>{item.quantity}× {item.product_name}</span><strong>R$ {(Number(item.unit_price||0)*item.quantity).toFixed(2).replace('.', ',')}</strong></div>)}</div>
+          <div className="receipt-total"><span>Total</span><strong>R$ {Number(receiptOrder.total||0).toFixed(2).replace('.', ',')}</strong></div>
+          <div className="receipt-section"><strong>Pagamento</strong><span>{receiptOrder.payment_method || 'A combinar'}</span>{receiptOrder.notes && <><strong>Observações</strong><span>{receiptOrder.notes}</span></>}</div>
+          {currentCatalog.address && <p className="receipt-footer">{currentCatalog.address}</p>}
+        </div>
+        <div className="share-actions receipt-actions"><button className="primary-button" onClick={()=>window.print()}>Imprimir / Salvar PDF</button><button className="secondary-button" onClick={()=>setReceiptOrder(null)}>Fechar</button></div>
+      </section></div>}</section>
   </main>;
 }
 
