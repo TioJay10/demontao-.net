@@ -550,20 +550,28 @@ function HomePage({ onLogin }) {
     load();
   }, []);
 
-  const productCatalogIds = new Set(products.filter(p => {
-    const q = query.trim().toLowerCase();
-    return q && ((p.name || '').toLowerCase().includes(q) || (p.description || '').toLowerCase().includes(q));
-  }).map(p => p.catalog_id));
+  const q = query.trim().toLowerCase();
+
+  const matchingProductsByCatalog = new Map();
+  if (q) {
+    products.forEach(p => {
+      const matches = (p.name || '').toLowerCase().includes(q) || (p.description || '').toLowerCase().includes(q);
+      if (matches) {
+        const current = matchingProductsByCatalog.get(p.catalog_id) || [];
+        if (current.length < 2) current.push(p);
+        matchingProductsByCatalog.set(p.catalog_id, current);
+      }
+    });
+  }
 
   const categories = ['all','Alimentação','Moda','Beleza','Casa','Serviços','Eventos','Tecnologia','Saúde','Educação','Automotivo','Outros'];
 
   const filtered = catalogs.filter(c => {
-    const q = query.trim().toLowerCase();
     return (category === 'all' || c.business_category === category) && (!q ||
       (c.company_name || '').toLowerCase().includes(q) ||
       (c.description || '').toLowerCase().includes(q) ||
       (c.address || '').toLowerCase().includes(q) ||
-      productCatalogIds.has(c.id);
+      matchingProductsByCatalog.has(c.id));
   });
 
   return <main className="app">
@@ -579,7 +587,14 @@ function HomePage({ onLogin }) {
       <div className="section-heading"><div><span className="eyebrow">EXPLORAR</span><h2>{query.trim() ? 'Resultados da busca' : 'Catálogos disponíveis'}</h2></div><span className="catalog-count">{filtered.length} {filtered.length === 1 ? 'catálogo' : 'catálogos'}</span></div>
       {loading ? <div className="empty-state"><h3>Carregando catálogos...</h3></div> : filtered.length ? <div className="catalog-grid">{filtered.map(c => <a className="catalog-card" key={c.id} href={'/' + c.slug}>
         <div className="catalog-card-logo">{c.logo_url ? <img src={c.logo_url} alt="" /> : <span>{c.company_name?.charAt(0).toUpperCase()}</span>}</div>
-        <div className="catalog-card-body"><h3>{c.company_name}</h3><p>{c.description || 'Confira produtos e serviços.'}</p>{c.address && <small>{c.address}</small>}<span className="catalog-card-link">Ver catálogo →</span></div>
+        <div className="catalog-card-body">
+          {c.business_category && <span className="catalog-card-category">{c.business_category}</span>}
+          <h3>{c.company_name}</h3>
+          <p>{c.description || 'Confira produtos e serviços.'}</p>
+          {c.address && <small>{c.address}</small>}
+          {q && matchingProductsByCatalog.get(c.id)?.length > 0 && <div className="catalog-card-matches"><span>Encontrado:</span>{matchingProductsByCatalog.get(c.id).map(p => <b key={p.id}>{p.name}</b>)}</div>}
+          <span className="catalog-card-link">Ver catálogo →</span>
+        </div>
       </a>)}</div> : <div className="empty-state"><div className="empty-icon">⌕</div><h3>Nenhum resultado encontrado</h3><p>Tente outro nome, produto, serviço ou localização.</p></div>}
     </section>
   </main>;
