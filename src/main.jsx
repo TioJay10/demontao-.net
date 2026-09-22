@@ -528,6 +528,39 @@ function PublicCatalog({ slug }) {
   </main>;
 }
 
+function HomePage({ onLogin }) {
+  const [catalogs, setCatalogs] = useState([]);
+  const [query, setQuery] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    supabase.from('catalogs').select('id,slug,company_name,description,logo_url,address,is_active')
+      .eq('is_active', true).order('created_at', { ascending: false })
+      .then(({ data }) => { setCatalogs(data || []); setLoading(false); });
+  }, []);
+
+  const filtered = catalogs.filter(c => {
+    const q = query.trim().toLowerCase();
+    return !q || c.company_name.toLowerCase().includes(q) || (c.description || '').toLowerCase().includes(q) || (c.address || '').toLowerCase().includes(q);
+  });
+
+  return <main className="app">
+    <header className="topbar"><div className="brand">DEMONTAO.NET</div><button className="login" onClick={onLogin}>Entrar</button></header>
+    <section className="home-hero">
+      <div><span className="eyebrow">CATÁLOGOS DIGITAIS</span><h1>Encontre o que você procura.</h1><p>Explore empresas, produtos e serviços em um só lugar.</p>
+        <div className="home-search"><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar empresa, produto ou serviço..." /></div>
+      </div>
+      <div className="home-hero-card"><strong>DEMONTAO.NET</strong><span>Seu catálogo. Seu negócio. Seu cliente.</span></div>
+    </section>
+    <section className="content home-content"><div className="section-heading"><div><span className="eyebrow">EXPLORAR</span><h2>Catálogos disponíveis</h2></div><span className="catalog-count">{filtered.length} {filtered.length === 1 ? 'catálogo' : 'catálogos'}</span></div>
+      {loading ? <div className="empty-state"><h3>Carregando catálogos...</h3></div> : filtered.length ? <div className="catalog-grid">{filtered.map(c => <a className="catalog-card" key={c.id} href={'/' + c.slug}>
+        <div className="catalog-card-logo">{c.logo_url ? <img src={c.logo_url} alt="" /> : <span>{c.company_name?.charAt(0).toUpperCase()}</span>}</div>
+        <div className="catalog-card-body"><h3>{c.company_name}</h3><p>{c.description || 'Confira produtos e serviços.'}</p>{c.address && <small>{c.address}</small>}<span className="catalog-card-link">Ver catálogo →</span></div>
+      </a>)}</div> : <div className="empty-state"><div className="empty-icon">⌕</div><h3>Nenhum catálogo encontrado</h3><p>Tente buscar pelo nome da empresa ou localização.</p></div>}
+    </section>
+  </main>;
+}
+
 function App() {
   const [view, setView] = useState(window.location.pathname !== '/' ? 'public' : 'home');
   const [publicSlug] = useState(window.location.pathname !== '/' ? window.location.pathname.split('/').filter(Boolean)[0] : '');
@@ -560,11 +593,7 @@ function App() {
   if (view === 'public') return <PublicCatalog slug={publicSlug} />;
   if (view === 'dashboard' && user && catalog) return <OwnerDashboard user={user} catalog={catalog} onLogout={async()=>{await supabase.auth.signOut(); setUser(null); setCatalog(null); setView('home')}} />;
 
-  return <main className="app">
-    <header className="topbar"><div className="brand">DEMONTAO.NET</div><button className="login" onClick={()=>{setAuthMode('login');setView('auth')}}>Entrar</button></header>
-    <section className="hero"><div><span className="eyebrow">CATÁLOGO DIGITAL</span><h1>Encontre produtos e serviços.</h1><p>Explore catálogos de empresas, escolha o que precisa e faça seu pedido de forma simples.</p></div><div className="hero-card" aria-hidden="true"><div className="hero-card-top"></div><div className="hero-card-lines"><i></i><i></i><i></i></div></div></section>
-    <section className="content"><div className="section-heading"><div><span className="eyebrow">EXPLORAR</span><h2>Destaques</h2></div><div className="search">Buscar produtos ou serviços</div></div><div className="categories">{categories.map((category,index)=><button className={index===0?'category active':'category'} key={category}>{category}</button>)}</div><div className="empty-state"><div className="empty-icon">+</div><h3>Seu catálogo começa aqui</h3><p>Os produtos e serviços cadastrados pelos lojistas aparecerão nesta área.</p></div></section>
-  </main>;
+  return <HomePage onLogin={()=>{setAuthMode('login');setView('auth')}} />;
 }
 
 createRoot(document.getElementById('root')).render(<React.StrictMode><App /></React.StrictMode>);
