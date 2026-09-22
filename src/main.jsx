@@ -101,6 +101,70 @@ function AuthScreen({ mode, setMode, onAuthenticated }) {
 }
 
 function OwnerDashboard({ user, catalog, onLogout }) {
+  const [tab, setTab] = useState('overview');
+  const [categories, setCategories] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [categoryName, setCategoryName] = useState('');
+  const [productForm, setProductForm] = useState({ name: '', description: '', price: '', stock: '', category_id: '', status: 'active' });
+  const [savingItem, setSavingItem] = useState(false);
+  const [catalogError, setCatalogError] = useState('');
+
+  useEffect(() => {
+    if (!catalog?.id || !supabase) return;
+    Promise.all([
+      supabase.from('categories').select('*').eq('catalog_id', catalog.id).order('sort_order').order('created_at'),
+      supabase.from('products').select('*').eq('catalog_id', catalog.id).order('created_at', { ascending: false })
+    ]).then(([cats, prods]) => {
+      if (cats.error) setCatalogError(cats.error.message); else setCategories(cats.data || []);
+      if (prods.error) setCatalogError(prods.error.message); else setProducts(prods.data || []);
+    });
+  }, [catalog?.id]);
+
+  const addCategory = async (event) => {
+    event.preventDefault();
+    if (!categoryName.trim()) return;
+    setSavingItem(true); setCatalogError('');
+    const { data, error } = await supabase.from('categories').insert({
+      catalog_id: catalog.id, name: categoryName.trim(), sort_order: categories.length, is_active: true
+    }).select('*').single();
+    if (error) setCatalogError(error.message);
+    else { setCategories([...categories, data]); setCategoryName(''); }
+    setSavingItem(false);
+  };
+
+  const addProduct = async (event) => {
+    event.preventDefault();
+    if (!productForm.name.trim()) return;
+    setSavingItem(true); setCatalogError('');
+    const payload = {
+      catalog_id: catalog.id,
+      category_id: productForm.category_id || null,
+      name: productForm.name.trim(),
+      description: productForm.description.trim() || null,
+      price: productForm.price === '' ? null : Number(productForm.price),
+      stock: productForm.stock === '' ? null : Number(productForm.stock),
+      status: productForm.status
+    };
+    const { data, error } = await supabase.from('products').insert(payload).select('*').single();
+    if (error) setCatalogError(error.message);
+    else {
+      setProducts([data, ...products]);
+      setProductForm({ name:'', description:'', price:'', stock:'', category_id:'', status:'active' });
+    }
+    setSavingItem(false);
+  };
+
+  const deleteCategory = async (id) => {
+    const { error } = await supabase.from('categories').delete().eq('id', id);
+    if (error) return setCatalogError(error.message);
+    setCategories(categories.filter(item => item.id !== id));
+  };
+
+  const deleteProduct = async (id) => {
+    const { error } = await supabase.from('products').delete().eq('id', id);
+    if (error) return setCatalogError(error.message);
+    setProducts(products.filter(item => item.id !== id));
+  };
   const [currentCatalog, setCurrentCatalog] = useState(catalog);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
@@ -122,16 +186,40 @@ function OwnerDashboard({ user, catalog, onLogout }) {
       <button className="secondary-button" onClick={onLogout}>Sair</button>
     </header>
     <section className="dashboard-content">
+      <nav className="dashboard-nav">
+        <button className={tab==='overview'?'nav-item active':'nav-item'} onClick={()=>setTab('overview')}>Visão geral</button>
+        <button className={tab==='categories'?'nav-item active':'nav-item'} onClick={()=>setTab('categories')}>Categorias</button>
+        <button className={tab==='products'?'nav-item active':'nav-item'} onClick={()=>setTab('products')}>Produtos e serviços</button>
+      </nav>
       <div className="dashboard-intro"><span className="eyebrow">OLÁ</span><h1>{currentCatalog.company_name || 'Meu catálogo'}</h1><p>Seu painel para organizar o catálogo digital.</p></div>
       <div className="status-card"><div><strong>Status do catálogo</strong><span>{currentCatalog.is_active ? 'Ativo' : 'Aguardando ativação do plano'}</span></div><span className={currentCatalog.is_active ? 'status-dot active' : 'status-dot'}></span></div>
-      <div className="dashboard-grid">
+      {catalogError && <div className="form-message">{catalogError}</div>}
+      {tab === 'overview' && <div className="dashboard-grid">
         <article className="panel"><span className="eyebrow">CATÁLOGO</span><h2>Dados da empresa</h2><form onSubmit={save} className="auth-form">
           <label>Nome da empresa<input value={companyName} onChange={e=>setCompanyName(e.target.value)} /></label>
           {message && <div className="form-message success">{message}</div>}
           <button className="primary-button" disabled={saving}>{saving ? 'Salvando...' : 'Salvar alterações'}</button>
         </form></article>
-        <article className="panel"><span className="eyebrow">PRÓXIMOS PASSOS</span><h2>Monte seu catálogo</h2><div className="feature-list"><div><b>01</b><span>Adicionar categorias</span></div><div><b>02</b><span>Cadastrar produtos e serviços</span></div><div><b>03</b><span>Personalizar sua página</span></div><div><b>04</b><span>Receber pedidos</span></div></div></article>
-      </div>
+        <article className="panel"><span className="eyebrow">PRÓXIMOS PASSOS</span><h2>Monte seu catálogo</h2><div className="feature-list"><div><b>01</b><span>Adicionar categorias</span></div><div><b>02</b><span>Cadastre categorias</span></div><div><b>03</b><span>Cadastre produtos e serviços</span></div><div><b>04</b><span>Personalize sua página</span></div></div></article>
+      </div>}
+      {tab === 'categories' && <article className="panel catalog-manager">
+        <span className="eyebrow">ORGANIZAÇÃO</span><h2>Categorias</h2>
+        <form onSubmit={addCategory} className="inline-form"><input placeholder="Ex.: Camisetas, Lanches, Manutenção..." value={categoryName} onChange={e=>setCategoryName(e.target.value)} /><button className="primary-button" disabled={savingItem}>Adicionar</button></form>
+        <div className="item-list">{categories.length===0 ? <p className="muted">Nenhuma categoria cadastrada.</p> : categories.map(item=><div className="catalog-item" key={item.id}><span>{item.name}</span><button className="danger-button" onClick={()=>deleteCategory(item.id)}>Excluir</button></div>)}</div>
+      </article>}
+      {tab === 'products' && <div className="products-manager">
+        <article className="panel"><span className="eyebrow">CATÁLOGO</span><h2>Novo produto ou serviço</h2>
+          <form onSubmit={addProduct} className="auth-form">
+            <label>Nome<input value={productForm.name} onChange={e=>setProductForm({...productForm,name:e.target.value})} placeholder="Nome do produto ou serviço" /></label>
+            <label>Descrição<textarea value={productForm.description} onChange={e=>setProductForm({...productForm,description:e.target.value})} maxLength={500} placeholder="Descrição curta" /></label>
+            <div className="form-two"><label>Preço<input type="number" min="0" step="0.01" value={productForm.price} onChange={e=>setProductForm({...productForm,price:e.target.value})} placeholder="0,00" /></label><label>Estoque<input type="number" min="0" step="1" value={productForm.stock} onChange={e=>setProductForm({...productForm,stock:e.target.value})} placeholder="Opcional" /></label></div>
+            <label>Categoria<select value={productForm.category_id} onChange={e=>setProductForm({...productForm,category_id:e.target.value})}><option value="">Sem categoria</option>{categories.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
+            <label>Status<select value={productForm.status} onChange={e=>setProductForm({...productForm,status:e.target.value})}><option value="active">Ativo</option><option value="inactive">Inativo</option><option value="out_of_stock">Sem estoque</option></select></label>
+            <button className="primary-button" disabled={savingItem}>{savingItem?'Salvando...':'Adicionar ao catálogo'}</button>
+          </form>
+        </article>
+        <article className="panel"><span className="eyebrow">CADASTRADOS</span><h2>{products.length} item(ns)</h2><div className="item-list">{products.length===0?<p className="muted">Nenhum produto ou serviço cadastrado.</p>:products.map(item=><div className="catalog-item product-row" key={item.id}><div><strong>{item.name}</strong><span>{item.price != null ? `R$ ${Number(item.price).toFixed(2).replace('.', ',')}` : 'Preço não informado'} · {item.status==='active'?'Ativo':item.status==='inactive'?'Inativo':'Sem estoque'}</span></div><button className="danger-button" onClick={()=>deleteProduct(item.id)}>Excluir</button></div>)}</div></article>
+      </div>}
     </section>
   </main>;
 }
