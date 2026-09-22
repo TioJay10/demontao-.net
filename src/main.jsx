@@ -310,6 +310,14 @@ function OwnerDashboard({ user, catalog, onLogout }) {
   const [companyName, setCompanyName] = useState(catalog?.company_name || '');
   useEffect(() => { if (catalog) { setCurrentCatalog(catalog); setCompanyName(catalog.company_name || ''); setSettings(prev => ({...prev, ...catalog, company_name: catalog.company_name || ''})); } }, [catalog]);
 
+  const setupItems = [
+    { label: 'Defina a categoria do negócio', done: !!currentCatalog.business_category },
+    { label: 'Adicione uma categoria de produtos ou serviços', done: categories.length > 0 },
+    { label: 'Cadastre seu primeiro produto ou serviço', done: products.length > 0 },
+    { label: 'Adicione logo, capa ou contatos', done: !!(currentCatalog.logo_url || currentCatalog.cover_url || currentCatalog.whatsapp || currentCatalog.instagram_url || currentCatalog.facebook_url) }
+  ];
+  const setupDone = setupItems.filter(item => item.done).length;
+
   const save = async (event) => {
     event.preventDefault(); setSaving(true); setMessage('');
     const { data, error } = await supabase.from('catalogs')
@@ -348,7 +356,7 @@ function OwnerDashboard({ user, catalog, onLogout }) {
           {message && <div className="form-message success">{message}</div>}
           <button className="primary-button" disabled={saving}>{saving ? 'Salvando...' : 'Salvar alterações'}</button>
         </form></article>
-        <article className="panel"><span className="eyebrow">PRÓXIMOS PASSOS</span><h2>Monte seu catálogo</h2><div className="feature-list"><div><b>01</b><span>Adicionar categorias</span></div><div><b>02</b><span>Cadastre categorias</span></div><div><b>03</b><span>Cadastre produtos e serviços</span></div><div><b>04</b><span>Personalize sua página</span></div></div></article>
+        <article className="panel setup-panel"><span className="eyebrow">CONFIGURAÇÃO</span><div className="setup-heading"><div><h2>Prepare seu catálogo</h2><p>{setupDone === setupItems.length ? 'Tudo pronto para divulgar.' : 'Complete os passos principais para deixar sua página pronta.'}</p></div><strong>{setupDone}/{setupItems.length}</strong></div><div className="setup-progress"><span style={{width: ((setupDone / setupItems.length) * 100) + '%'}}></span></div><div className="setup-list">{setupItems.map((item,index)=><div className={item.done ? 'setup-item done' : 'setup-item'} key={item.label}><b>{item.done ? '✓' : String(index + 1).padStart(2,'0')}</b><span>{item.label}</span></div>)}</div></article>
       </div>}
       {tab === 'categories' && <article className="panel catalog-manager">
         <span className="eyebrow">ORGANIZAÇÃO</span><h2>Categorias</h2>
