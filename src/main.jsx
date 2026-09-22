@@ -350,14 +350,21 @@ function OwnerDashboard({ user, catalog, onLogout }) {
       {qrOpen && <div className="modal-backdrop" onClick={()=>setQrOpen(false)}><section className="qr-modal" onClick={e=>e.stopPropagation()}><button className="modal-close" onClick={()=>setQrOpen(false)}>×</button><span className="eyebrow">SEU CATÁLOGO</span><h2>QR Code</h2><p>Aponte a câmera do celular para acessar <strong>{currentCatalog.company_name}</strong>.</p><div className="qr-frame"><img src={'https://api.qrserver.com/v1/create-qr-code/?size=360x360&margin=12&data='+encodeURIComponent(window.location.origin+'/'+currentCatalog.slug)} alt="QR Code do catálogo" /></div><div className="qr-url">{window.location.origin+'/'+currentCatalog.slug}</div><div className="share-actions"><a className="primary-button qr-download" href={'https://api.qrserver.com/v1/create-qr-code/?size=1200x1200&margin=20&data='+encodeURIComponent(window.location.origin+'/'+currentCatalog.slug)} target="_blank" rel="noreferrer">Abrir QR Code</a><button className="secondary-button" onClick={()=>navigator.clipboard?.writeText(window.location.origin+'/'+currentCatalog.slug)}>Copiar link</button></div></section></div>}
       <div className="status-card"><div><strong>Status do catálogo</strong><span>{currentCatalog.is_active ? 'Ativo' : 'Aguardando ativação do plano'}</span></div><span className={currentCatalog.is_active ? 'status-dot active' : 'status-dot'}></span></div>
       {catalogError && <div className="form-message">{catalogError}</div>}
-      {tab === 'overview' && <div className="dashboard-grid">
+      {tab === 'overview' && <>
+        <div className="dashboard-metrics">
+          <button type="button" className="metric-card" onClick={()=>setTab('categories')}><span>Categorias</span><strong>{categories.length}</strong><small>Organização do catálogo</small></button>
+          <button type="button" className="metric-card" onClick={()=>setTab('products')}><span>Produtos e serviços</span><strong>{products.length}</strong><small>Itens cadastrados</small></button>
+          <button type="button" className="metric-card" onClick={()=>setTab('orders')}><span>Pedidos</span><strong>{orders.length}</strong><small>Pedidos recebidos</small></button>
+          <div className="metric-card metric-status"><span>Status do catálogo</span><strong>{currentCatalog.is_active ? 'Ativo' : 'Inativo'}</strong><small>{currentCatalog.is_active ? 'Seu catálogo está público' : 'Aguardando ativação do plano'}</small></div>
+        </div>
+        <div className="dashboard-grid">
         <article className="panel"><span className="eyebrow">CATÁLOGO</span><h2>Dados da empresa</h2><form onSubmit={save} className="auth-form">
           <label>Nome da empresa<input value={companyName} onChange={e=>setCompanyName(e.target.value)} /></label>
           {message && <div className="form-message success">{message}</div>}
           <button className="primary-button" disabled={saving}>{saving ? 'Salvando...' : 'Salvar alterações'}</button>
         </form></article>
         <article className="panel setup-panel"><span className="eyebrow">CONFIGURAÇÃO</span><div className="setup-heading"><div><h2>Prepare seu catálogo</h2><p>{setupDone === setupItems.length ? 'Tudo pronto para divulgar.' : 'Complete os passos principais para deixar sua página pronta.'}</p></div><strong>{setupDone}/{setupItems.length}</strong></div><div className="setup-progress"><span style={{width: ((setupDone / setupItems.length) * 100) + '%'}}></span></div><div className="setup-list">{setupItems.map((item,index)=><div className={item.done ? 'setup-item done' : 'setup-item'} key={item.label}><b>{item.done ? '✓' : String(index + 1).padStart(2,'0')}</b><span>{item.label}</span></div>)}</div></article>
-      </div>}
+      </div></>}
       {tab === 'categories' && <article className="panel catalog-manager">
         <span className="eyebrow">ORGANIZAÇÃO</span><h2>Categorias</h2>
         <form onSubmit={addCategory} className="inline-form"><input placeholder="Ex.: Camisetas, Lanches, Manutenção..." value={categoryName} onChange={e=>setCategoryName(e.target.value)} /><button className="primary-button" disabled={savingItem}>Adicionar</button></form>
