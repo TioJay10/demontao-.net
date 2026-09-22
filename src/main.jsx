@@ -114,6 +114,7 @@ function OwnerDashboard({ user, catalog, onLogout }) {
   const [settings, setSettings] = useState({ company_name: catalog?.company_name || '', description: catalog?.description || '', whatsapp: catalog?.whatsapp || '', address: catalog?.address || '', hours: catalog?.hours || '', instagram_url: catalog?.instagram_url || '', facebook_url: catalog?.facebook_url || '', primary_color: catalog?.primary_color || '#111827', secondary_color: catalog?.secondary_color || '#6b7280', background_color: catalog?.background_color || '#f7f7f5', button_color: catalog?.button_color || '#111827', theme: catalog?.theme || 'Minimalista', logo_url: catalog?.logo_url || '', cover_url: catalog?.cover_url || '' });
   const [savingItem, setSavingItem] = useState(false);
   const [catalogError, setCatalogError] = useState('');
+  const [qrOpen, setQrOpen] = useState(false);
 
   useEffect(() => {
     if (!catalog?.id || !supabase) return;
@@ -293,6 +294,11 @@ function OwnerDashboard({ user, catalog, onLogout }) {
         <button className={tab==='customize'?'nav-item active':'nav-item'} onClick={()=>setTab('customize')}>Personalizar catálogo</button>
       </nav>
       <div className="dashboard-intro"><span className="eyebrow">OLÁ</span><h1>{currentCatalog.company_name || 'Meu catálogo'}</h1><p>Seu painel para organizar o catálogo digital.</p></div>
+      <div className="share-catalog-card">
+        <div><span className="eyebrow">DIVULGAÇÃO</span><h2>Compartilhe seu catálogo</h2><p>Use o QR Code para seus clientes acessarem seu catálogo pelo celular.</p></div>
+        <div className="share-actions"><button className="primary-button" onClick={()=>setQrOpen(true)}>Mostrar QR Code</button><button className="secondary-button" onClick={()=>navigator.clipboard?.writeText(window.location.origin+'/'+currentCatalog.slug)}>Copiar link</button></div>
+      </div>
+      {qrOpen && <div className="modal-backdrop" onClick={()=>setQrOpen(false)}><section className="qr-modal" onClick={e=>e.stopPropagation()}><button className="modal-close" onClick={()=>setQrOpen(false)}>×</button><span className="eyebrow">SEU CATÁLOGO</span><h2>QR Code</h2><p>Aponte a câmera do celular para acessar <strong>{currentCatalog.company_name}</strong>.</p><div className="qr-frame"><img src={'https://api.qrserver.com/v1/create-qr-code/?size=360x360&margin=12&data='+encodeURIComponent(window.location.origin+'/'+currentCatalog.slug)} alt="QR Code do catálogo" /></div><div className="qr-url">{window.location.origin+'/'+currentCatalog.slug}</div><div className="share-actions"><a className="primary-button qr-download" href={'https://api.qrserver.com/v1/create-qr-code/?size=1200x1200&margin=20&data='+encodeURIComponent(window.location.origin+'/'+currentCatalog.slug)} target="_blank" rel="noreferrer">Abrir QR Code</a><button className="secondary-button" onClick={()=>navigator.clipboard?.writeText(window.location.origin+'/'+currentCatalog.slug)}>Copiar link</button></div></section></div>}
       <div className="status-card"><div><strong>Status do catálogo</strong><span>{currentCatalog.is_active ? 'Ativo' : 'Aguardando ativação do plano'}</span></div><span className={currentCatalog.is_active ? 'status-dot active' : 'status-dot'}></span></div>
       {catalogError && <div className="form-message">{catalogError}</div>}
       {tab === 'overview' && <div className="dashboard-grid">
