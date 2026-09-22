@@ -345,8 +345,101 @@ function OwnerDashboard({ user, catalog, onLogout }) {
   </main>;
 }
 
+function PublicCatalog({ slug }) {
+  const [catalog, setCatalog] = useState(null);
+  const [categories, setCategories] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [cart, setCart] = useState([]);
+  const [query, setQuery] = useState('');
+  const [activeCategory, setActiveCategory] = useState('all');
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [checkout, setCheckout] = useState({ customer_name:'', phone:'', address:'', notes:'', payment_method:'A combinar' });
+  const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState('');
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true); setMessage('');
+      const { data: c, error: ce } = await supabase.from('catalogs').select('*').eq('slug', slug).eq('is_active', true).maybeSingle();
+      if (ce || !c) { setMessage('Catálogo não encontrado ou ainda não está ativo.'); setLoading(false); return; }
+      const [cats, prods] = await Promise.all([
+        supabase.from('categories').select('*').eq('catalog_id', c.id).eq('is_active', true).order('sort_order').order('created_at'),
+        supabase.from('products').select('*, product_images(*)').eq('catalog_id', c.id).eq('status','active').order('created_at', {ascending:false})
+      ]);
+      if (cats.error || prods.error) setMessage(cats.error?.message || prods.error?.message || 'Não foi possível carregar o catálogo.');
+      setCatalog(c); setCategories(cats.data || []); setProducts(prods.data || []); setLoading(false);
+    };
+    load();
+  }, [slug]);
+
+  const filtered = products.filter(p => {
+    const matchesCategory = activeCategory === 'all' || p.category_id === activeCategory;
+    const text = query.trim().toLowerCase();
+    return matchesCategory && (!text || p.name.toLowerCase().includes(text) || (p.description || '').toLowerCase().includes(text));
+  });
+  const addToCart = (product) => {
+    setCart(items => {
+      const found = items.find(i => i.product.id === product.id);
+      if (found) return items.map(i => i.product.id === product.id ? {...i, quantity:i.quantity+1} : i);
+      return [...items, {product, quantity:1}];
+    });
+    setSelectedProduct(null);
+  };
+  const changeQty = (id, delta) => setCart(items => items.map(i => i.product.id === id ? {...i, quantity:Math.max(0,i.quantity+delta)} : i).filter(i=>i.quantity>0));
+  const total = cart.reduce((sum,i) => sum + (Number(i.product.price)||0)*i.quantity, 0);
+  const money = value => value == null ? 'Consultar' : 'R$ ' + Number(value).toFixed(2).replace('.', ',');
+  const publicImage = p => p.product_images?.[0]?.image_url || '';
+
+  const submitOrder = async (event) => {
+    event.preventDefault();
+    if (!cart.length || !checkout.customer_name.trim() || !checkout.phone.trim()) return setMessage('Informe nome e telefone para enviar o pedido.');
+    setMessage('');
+    const { data: order, error } = await supabase.from('orders').insert({
+      catalog_id: catalog.id, customer_name: checkout.customer_name.trim(), phone: checkout.phone.trim(),
+      address: checkout.address.trim() || null, notes: checkout.notes.trim() || null,
+      payment_method: checkout.payment_method, status:'new', total: total
+    }).select('*').single();
+    if (error) return setMessage(error.message);
+    const items = cart.map(i => ({order_id:order.id, product_id:i.product.id, product_name:i.product.name, quantity:i.quantity, unit_price:Number(i.product.price)||0}));
+    const { error: itemError } = await supabase.from('order_items').insert(items);
+    if (itemError) { await supabase.from('orders').delete().eq('id', order.id); return setMessage(itemError.message); }
+    const lines = cart.map(i => '• ' + i.product.name + ' x' + i.quantity + ' — ' + money((Number(i.product.price)||0)*i.quantity)).join('\n');
+    const text = 'Olá, ' + catalog.company_name + '!\n\nNovo pedido #' + order.id.slice(0,8) + '\n' + lines + '\n\nTotal: ' + money(total) + '\nCliente: ' + checkout.customer_name + '\nTelefone: ' + checkout.phone + (checkout.address ? '\nEndereço: ' + checkout.address : '') + (checkout.notes ? '\nObservações: ' + checkout.notes : '') + '\nPagamento: ' + checkout.payment_method;
+    const phone = (catalog.whatsapp || '').replace(/\D/g,'');
+    if (phone) window.open('https://wa.me/' + phone + '?text=' + encodeURIComponent(text), '_blank', 'noopener,noreferrer');
+    setCart([]); setCheckoutOpen(false); setCheckout({customer_name:'',phone:'',address:'',notes:'',payment_method:'A combinar'}); setMessage('Pedido #' + order.id.slice(0,8) + ' criado com sucesso.');
+  };
+
+  if (loading) return <div className="loading-screen">DEMONTAO.NET</div>;
+  if (!catalog) return <main className="public-error"><div><div className="brand">DEMONTAO.NET</div><h1>{message}</h1><a href="/">Voltar ao início</a></div></main>;
+  const themeStyle = { '--catalog-primary': catalog.primary_color || '#111827', '--catalog-secondary': catalog.secondary_color || '#6b7280', '--catalog-bg': catalog.background_color || '#f7f7f5', '--catalog-button': catalog.button_color || '#111827' };
+
+  return <main className="public-catalog" style={themeStyle}>
+    <header className="public-header">
+      <div className="public-brand-area">{catalog.logo_url ? <img className="catalog-logo" src={catalog.logo_url} alt="" /> : null}<div><h1>{catalog.company_name}</h1><p>{catalog.description}</p></div></div>
+      <button className="cart-button" onClick={()=>setCheckoutOpen(true)}>Carrinho <span>{cart.reduce((n,i)=>n+i.quantity,0)}</span></button>
+    </header>
+    {catalog.cover_url && <div className="catalog-cover"><img src={catalog.cover_url} alt="" /></div>}
+    <section className="public-content">
+      <div className="public-info">{catalog.address && <span>📍 {catalog.address}</span>}{catalog.hours && <span>🕒 {catalog.hours}</span>}{catalog.whatsapp && <a href={'https://wa.me/' + catalog.whatsapp.replace(/\D/g,'')} target="_blank" rel="noreferrer">WhatsApp</a>}</div>
+      <div className="public-search"><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar produtos ou serviços..." /></div>
+      <div className="public-categories"><button className={activeCategory==='all'?'category active':'category'} onClick={()=>setActiveCategory('all')}>Todos</button>{categories.map(c=><button key={c.id} className={activeCategory===c.id?'category active':'category'} onClick={()=>setActiveCategory(c.id)}>{c.name}</button>)}</div>
+      {message && <div className="public-message">{message}</div>}
+      <div className="product-grid">{filtered.map(p=><article className="public-product" key={p.id} onClick={()=>setSelectedProduct(p)}>
+        <div className="public-product-image">{publicImage(p) ? <img src={publicImage(p)} alt="" /> : <span>Sem foto</span>}</div>
+        <div className="public-product-body"><span className="product-category">{categories.find(c=>c.id===p.category_id)?.name || 'Produto'}</span><h2>{p.name}</h2><p>{p.description}</p><strong>{money(p.price)}</strong></div>
+      </article>)}</div>
+      {!filtered.length && <div className="public-empty"><h2>Nenhum item encontrado</h2><p>Tente outra busca ou categoria.</p></div>}
+    </section>
+    {selectedProduct && <div className="modal-backdrop" onClick={()=>setSelectedProduct(null)}><section className="product-modal" onClick={e=>e.stopPropagation()}><button className="modal-close" onClick={()=>setSelectedProduct(null)}>×</button><div className="modal-image">{publicImage(selectedProduct) ? <img src={publicImage(selectedProduct)} alt="" /> : <span>Sem foto</span>}</div><div className="modal-body"><span className="product-category">{categories.find(c=>c.id===selectedProduct.category_id)?.name || 'Produto'}</span><h2>{selectedProduct.name}</h2><p>{selectedProduct.description}</p><strong>{money(selectedProduct.price)}</strong><button className="primary-button" onClick={()=>addToCart(selectedProduct)}>Adicionar ao carrinho</button></div></section></div>}
+    {checkoutOpen && <div className="modal-backdrop" onClick={()=>setCheckoutOpen(false)}><section className="checkout-modal" onClick={e=>e.stopPropagation()}><button className="modal-close" onClick={()=>setCheckoutOpen(false)}>×</button><span className="eyebrow">PEDIDO</span><h2>Seu carrinho</h2><div className="cart-list">{cart.map(i=><div className="cart-item" key={i.product.id}><div><strong>{i.product.name}</strong><span>{money(i.product.price)} cada</span></div><div className="qty"><button onClick={()=>changeQty(i.product.id,-1)}>−</button><b>{i.quantity}</b><button onClick={()=>changeQty(i.product.id,1)}>+</button></div></div>)}</div>{!cart.length ? <p className="muted">Seu carrinho está vazio.</p> : <><div className="cart-total"><span>Total</span><strong>{money(total)}</strong></div><form className="auth-form" onSubmit={submitOrder}><label>Nome<input required value={checkout.customer_name} onChange={e=>setCheckout({...checkout,customer_name:e.target.value})} /></label><label>Telefone / WhatsApp<input required value={checkout.phone} onChange={e=>setCheckout({...checkout,phone:e.target.value})} /></label><label>Endereço<textarea value={checkout.address} onChange={e=>setCheckout({...checkout,address:e.target.value})} placeholder="Opcional" /></label><label>Observações<textarea value={checkout.notes} onChange={e=>setCheckout({...checkout,notes:e.target.value})} placeholder="Opcional" /></label><label>Forma de pagamento<select value={checkout.payment_method} onChange={e=>setCheckout({...checkout,payment_method:e.target.value})}><option>A combinar</option><option>Pix</option><option>Dinheiro</option><option>Cartão</option></select></label>{message && <div className="form-message">{message}</div>}<button className="primary-button">Enviar pedido pelo WhatsApp</button></form></>}</section></div>}
+  </main>;
+}
+
 function App() {
-  const [view, setView] = useState('home');
+  const [view, setView] = useState(window.location.pathname !== '/' ? 'public' : 'home');
+  const [publicSlug] = useState(window.location.pathname !== '/' ? window.location.pathname.split('/').filter(Boolean)[0] : '');
   const [authMode, setAuthMode] = useState('login');
   const [user, setUser] = useState(null);
   const [catalog, setCatalog] = useState(null);
@@ -373,6 +466,7 @@ function App() {
 
   if (loading) return <div className="loading-screen">DEMONTAO.NET</div>;
   if (view === 'auth') return <AuthScreen mode={authMode} setMode={setAuthMode} onAuthenticated={handleSession} />;
+  if (view === 'public') return <PublicCatalog slug={publicSlug} />;
   if (view === 'dashboard' && user && catalog) return <OwnerDashboard user={user} catalog={catalog} onLogout={async()=>{await supabase.auth.signOut(); setUser(null); setCatalog(null); setView('home')}} />;
 
   return <main className="app">
