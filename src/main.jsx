@@ -112,7 +112,7 @@ function OwnerDashboard({ user, catalog, onLogout }) {
   const [productImage, setProductImage] = useState(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [brandUploading, setBrandUploading] = useState('');
-  const [settings, setSettings] = useState({ company_name: catalog?.company_name || '', description: catalog?.description || '', whatsapp: catalog?.whatsapp || '', address: catalog?.address || '', hours: catalog?.hours || '', instagram_url: catalog?.instagram_url || '', facebook_url: catalog?.facebook_url || '', primary_color: catalog?.primary_color || '#111827', secondary_color: catalog?.secondary_color || '#6b7280', background_color: catalog?.background_color || '#f7f7f5', button_color: catalog?.button_color || '#111827', theme: catalog?.theme || 'Minimalista', logo_url: catalog?.logo_url || '', cover_url: catalog?.cover_url || '' });
+  const [settings, setSettings] = useState({ company_name: catalog?.company_name || '', description: catalog?.description || '', whatsapp: catalog?.whatsapp || '', address: catalog?.address || '', hours: catalog?.hours || '', instagram_url: catalog?.instagram_url || '', facebook_url: catalog?.facebook_url || '', primary_color: catalog?.primary_color || '#111827', secondary_color: catalog?.secondary_color || '#6b7280', background_color: catalog?.background_color || '#f7f7f5', button_color: catalog?.button_color || '#111827', theme: catalog?.theme || 'minimalist', logo_url: catalog?.logo_url || '', cover_url: catalog?.cover_url || '' });
   const [savingItem, setSavingItem] = useState(false);
   const [catalogError, setCatalogError] = useState('');
   const [qrOpen, setQrOpen] = useState(false);
@@ -383,7 +383,7 @@ function OwnerDashboard({ user, catalog, onLogout }) {
         {orders.length === 0 ? <p className="muted">Nenhum pedido recebido ainda.</p> : <div className="orders-list">
           {orders.map(order => <div className="order-card" key={order.id}>
             <div className="order-head"><div><strong>Pedido #{order.id.slice(0,8)}</strong><span>{new Date(order.created_at).toLocaleString('pt-BR')}</span></div><strong>R$ {Number(order.total || 0).toFixed(2).replace('.', ',')}</strong></div>
-            <div className="order-customer"><strong>{order.customer_name}</strong><span>{order.phone}</span>{order.address && <span>{order.address}</span>}</div>
+            <div className="order-customer"><strong>{order.customer_name}</strong><span>{order.customer_phone}</span>{order.address && <span>{order.customer_address}</span>}</div>
             <div className="order-items">{(order.order_items || []).map((item, i) => <div key={i}><span>{item.quantity}× {item.product_name}</span><strong>R$ {(Number(item.unit_price||0)*item.quantity).toFixed(2).replace('.', ',')}</strong></div>)}</div>
             {order.notes && <p className="order-notes"><strong>Obs.:</strong> {order.notes}</p>}
             <div className="order-actions"><select value={order.status} onChange={e=>updateOrderStatus(order.id,e.target.value)}><option value="new">Novo</option><option value="in_analysis">Em análise</option><option value="confirmed">Confirmado</option><option value="completed">Concluído</option><option value="cancelled">Cancelado</option></select>{order.status === 'confirmed' && <button className="secondary-button" onClick={()=>setReceiptOrder(order)}>Ver comprovante</button>}</div>
@@ -402,7 +402,7 @@ function OwnerDashboard({ user, catalog, onLogout }) {
           <div className="form-two"><label>WhatsApp<input value={settings.whatsapp} onChange={e=>setSettings({...settings,whatsapp:e.target.value})} placeholder="5511999999999" /></label><label>Horário de atendimento<input value={settings.hours} onChange={e=>setSettings({...settings,hours:e.target.value})} placeholder="Seg a Sex · 9h às 18h" /></label></div>
           <label>Endereço<input value={settings.address} onChange={e=>setSettings({...settings,address:e.target.value})} placeholder="Rua, número, bairro, cidade - UF" /></label>
           <div className="form-two"><label>Instagram<input value={settings.instagram_url} onChange={e=>setSettings({...settings,instagram_url:e.target.value})} placeholder="https://instagram.com/..." /></label><label>Facebook<input value={settings.facebook_url} onChange={e=>setSettings({...settings,facebook_url:e.target.value})} placeholder="https://facebook.com/..." /></label></div>
-          <label>Tema<select value={settings.theme} onChange={e=>setSettings({...settings,theme:e.target.value})}><option>Minimalista</option><option>Moderno</option><option>Elegante</option><option>Colorido</option></select></label>
+          <label>Tema<select value={settings.theme} onChange={e=>setSettings({...settings,theme:e.target.value})}><option value="minimalist">Minimalista</option><option value="modern">Moderno</option><option value="elegant">Elegante</option><option value="colorful">Colorido</option></select></label>
           <div className="color-grid">
             <label>Primária<input type="color" value={settings.primary_color} onChange={e=>setSettings({...settings,primary_color:e.target.value})} /></label>
             <label>Secundária<input type="color" value={settings.secondary_color} onChange={e=>setSettings({...settings,secondary_color:e.target.value})} /></label>
@@ -422,7 +422,7 @@ function OwnerDashboard({ user, catalog, onLogout }) {
           <span className="eyebrow">COMPROVANTE DE PEDIDO</span>
           <h2>Pedido #{receiptOrder.id.slice(0,8)}</h2>
           <p className="receipt-date">{new Date(receiptOrder.created_at).toLocaleString('pt-BR')}</p>
-          <div className="receipt-section"><strong>Cliente</strong><span>{receiptOrder.customer_name}</span><span>{receiptOrder.phone}</span>{receiptOrder.address && <span>{receiptOrder.address}</span>}</div>
+          <div className="receipt-section"><strong>Cliente</strong><span>{receiptOrder.customer_name}</span><span>{receiptOrder.customer_phone}</span>{receiptOrder.address && <span>{receiptOrder.customer_address}</span>}</div>
           <div className="receipt-items">{(receiptOrder.order_items || []).map((item,i)=><div key={i}><span>{item.quantity}× {item.product_name}</span><strong>R$ {(Number(item.unit_price||0)*item.quantity).toFixed(2).replace('.', ',')}</strong></div>)}</div>
           <div className="receipt-total"><span>Total</span><strong>R$ {Number(receiptOrder.total||0).toFixed(2).replace('.', ',')}</strong></div>
           <div className="receipt-section"><strong>Pagamento</strong><span>{receiptOrder.payment_method || 'A combinar'}</span>{receiptOrder.notes && <><strong>Observações</strong><span>{receiptOrder.notes}</span></>}</div>
@@ -484,8 +484,8 @@ function PublicCatalog({ slug }) {
     if (!cart.length || !checkout.customer_name.trim() || !checkout.phone.trim()) return setMessage('Informe nome e telefone para enviar o pedido.');
     setMessage('');
     const { data: order, error } = await supabase.from('orders').insert({
-      catalog_id: catalog.id, customer_name: checkout.customer_name.trim(), phone: checkout.phone.trim(),
-      address: checkout.address.trim() || null, notes: checkout.notes.trim() || null,
+      catalog_id: catalog.id, customer_name: checkout.customer_name.trim(), customer_phone: checkout.phone.trim(),
+      customer_address: checkout.address.trim() || null, notes: checkout.notes.trim() || null,
       payment_method: checkout.payment_method, status:'new', total: total
     }).select('*').single();
     if (error) return setMessage(error.message);
