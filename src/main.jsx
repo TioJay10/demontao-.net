@@ -540,7 +540,7 @@ function HomePage({ onLogin }) {
   useEffect(() => {
     const load = async () => {
       const [{ data: catalogData }, { data: productData }] = await Promise.all([
-        supabase.from('catalogs').select('id,slug,company_name,description,logo_url,address,business_category,is_active').eq('is_active', true).order('created_at', { ascending: false }),
+        supabase.from('catalogs').select('id,slug,company_name,description,logo_url,address,business_category,is_active,created_at').eq('is_active', true).order('created_at', { ascending: false }),
         supabase.from('products').select('id,catalog_id,name,description,status').eq('status', 'active')
       ]);
       setCatalogs(catalogData || []);
@@ -574,28 +574,108 @@ function HomePage({ onLogin }) {
       matchingProductsByCatalog.has(c.id));
   });
 
-  return <main className="app">
-    <header className="topbar"><div className="brand">DEMONTAO.NET</div><button className="login" onClick={onLogin}>Entrar</button></header>
-    <section className="home-hero">
-      <div><span className="eyebrow">CATÁLOGOS DIGITAIS</span><h1>Encontre o que você procura.</h1><p>Explore empresas, produtos e serviços em um só lugar.</p>
-        <div className="home-search"><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar empresa, produto ou serviço..." /></div>
+  const showRecent = !q && category === 'all';
+  const recentCatalogs = showRecent ? catalogs.slice(0, 3) : [];
+  const recentIds = new Set(recentCatalogs.map(c => c.id));
+  const categoryCounts = categories.slice(1).reduce((acc, item) => {
+    acc[item] = catalogs.filter(c => c.business_category === item).length;
+    return acc;
+  }, {});
+
+  const renderCatalogCard = (c) => (
+    <a className="catalog-card" key={c.id} href={'/' + c.slug}>
+      <div className="catalog-card-logo">
+        {c.logo_url ? <img src={c.logo_url} alt="" /> : <span>{c.company_name?.charAt(0).toUpperCase()}</span>}
       </div>
-      <div className="home-hero-card"><strong>DEMONTAO.NET</strong><span>Seu catálogo. Seu negócio. Seu cliente.</span></div>
-    </section>
-    <section className="content home-content">
-      <div className="home-category-filter">{categories.map(item => <button key={item} type="button" className={category === item ? 'active' : ''} onClick={()=>setCategory(item)}>{item === 'all' ? 'Todos' : item}</button>)}</div>
-      <div className="section-heading"><div><span className="eyebrow">EXPLORAR</span><h2>{query.trim() ? 'Resultados da busca' : 'Catálogos disponíveis'}</h2></div><span className="catalog-count">{filtered.length} {filtered.length === 1 ? 'catálogo' : 'catálogos'}</span></div>
-      {loading ? <div className="empty-state"><h3>Carregando catálogos...</h3></div> : filtered.length ? <div className="catalog-grid">{filtered.map(c => <a className="catalog-card" key={c.id} href={'/' + c.slug}>
-        <div className="catalog-card-logo">{c.logo_url ? <img src={c.logo_url} alt="" /> : <span>{c.company_name?.charAt(0).toUpperCase()}</span>}</div>
-        <div className="catalog-card-body">
-          {c.business_category && <span className="catalog-card-category">{c.business_category}</span>}
-          <h3>{c.company_name}</h3>
-          <p>{c.description || 'Confira produtos e serviços.'}</p>
-          {c.address && <small>{c.address}</small>}
-          {q && matchingProductsByCatalog.get(c.id)?.length > 0 && <div className="catalog-card-matches"><span>Encontrado:</span>{matchingProductsByCatalog.get(c.id).map(p => <b key={p.id}>{p.name}</b>)}</div>}
-          <span className="catalog-card-link">Ver catálogo →</span>
+      <div className="catalog-card-body">
+        {c.business_category && <span className="catalog-card-category">{c.business_category}</span>}
+        <h3>{c.company_name}</h3>
+        <p>{c.description || 'Confira produtos e serviços.'}</p>
+        {c.address && <small>{c.address}</small>}
+        {q && matchingProductsByCatalog.get(c.id)?.length > 0 && (
+          <div className="catalog-card-matches">
+            <span>Encontrado:</span>
+            {matchingProductsByCatalog.get(c.id).map(p => <b key={p.id}>{p.name}</b>)}
+          </div>
+        )}
+        <span className="catalog-card-link">Ver catálogo <b>→</b></span>
+      </div>
+    </a>
+  );
+
+  return <main className="app">
+    <header className="topbar">
+      <div className="brand">DEMONTAO.NET</div>
+      <button className="login" onClick={onLogin}>Entrar</button>
+    </header>
+
+    <section className="home-hero">
+      <div>
+        <span className="eyebrow">CATÁLOGOS DIGITAIS</span>
+        <h1>Encontre o que você procura.</h1>
+        <p>Explore empresas, produtos e serviços em um só lugar.</p>
+        <div className="home-search">
+          <input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar empresa, produto ou serviço..." />
         </div>
-      </a>)}</div> : <div className="empty-state"><div className="empty-icon">⌕</div><h3>Nenhum resultado encontrado</h3><p>Tente outro nome, produto, serviço ou localização.</p></div>}
+      </div>
+      <div className="home-hero-card">
+        <strong>DEMONTAO.NET</strong>
+        <span>Seu catálogo. Seu negócio. Seu cliente.</span>
+      </div>
+    </section>
+
+    <section className="content home-content">
+      <div className="home-discovery-heading">
+        <div>
+          <span className="eyebrow">EXPLORAR</span>
+          <h2>Encontre por categoria</h2>
+        </div>
+        {!loading && <span className="catalog-count">{catalogs.length} {catalogs.length === 1 ? 'catálogo ativo' : 'catálogos ativos'}</span>}
+      </div>
+
+      <div className="home-category-filter">
+        {categories.map(item => (
+          <button key={item} type="button" className={category === item ? 'active' : ''} onClick={()=>setCategory(item)}>
+            {item === 'all' ? 'Todos' : item}
+            {item !== 'all' && categoryCounts[item] > 0 ? <small>{categoryCounts[item]}</small> : null}
+          </button>
+        ))}
+      </div>
+
+      {loading ? <div className="empty-state"><h3>Carregando catálogos...</h3></div> : <>
+        {showRecent && recentCatalogs.length > 0 && (
+          <section className="home-subsection">
+            <div className="home-subsection-heading">
+              <div>
+                <span className="eyebrow">NOVOS NA PLATAFORMA</span>
+                <h2>Catálogos recentes</h2>
+              </div>
+              <span>Atualizados primeiro</span>
+            </div>
+            <div className="recent-catalog-grid">{recentCatalogs.map(renderCatalogCard)}</div>
+          </section>
+        )}
+
+        <section className="home-subsection">
+          <div className="home-subsection-heading">
+            <div>
+              <span className="eyebrow">{q ? 'BUSCA' : 'CATÁLOGOS'}</span>
+              <h2>{q ? 'Resultados da busca' : category !== 'all' ? category : 'Todos os catálogos'}</h2>
+            </div>
+            <span>{filtered.length} {filtered.length === 1 ? 'resultado' : 'resultados'}</span>
+          </div>
+
+          {filtered.length ? (
+            <div className="catalog-grid">{filtered.map(renderCatalogCard)}</div>
+          ) : (
+            <div className="empty-state">
+              <div className="empty-icon">⌕</div>
+              <h3>Nenhum resultado encontrado</h3>
+              <p>Tente outro nome, produto, serviço ou localização.</p>
+            </div>
+          )}
+        </section>
+      </>}
     </section>
   </main>;
 }
