@@ -525,6 +525,17 @@ function PublicCatalog({ slug }) {
       </article>)}</div>
       {!filtered.length && <div className="public-empty"><h2>Nenhum item encontrado</h2><p>Tente outra busca ou categoria.</p></div>}
     </section>
+    {(catalog.instagram_url || catalog.facebook_url || catalog.whatsapp) && <footer className="public-footer">
+      <div>
+        <strong>{catalog.company_name}</strong>
+        <span>Catálogo digital no DEMONTAO.NET</span>
+      </div>
+      <div className="public-footer-links">
+        {catalog.whatsapp && <a href={'https://wa.me/' + catalog.whatsapp.replace(/\D/g,'')} target="_blank" rel="noreferrer">WhatsApp</a>}
+        {catalog.instagram_url && <a href={catalog.instagram_url} target="_blank" rel="noreferrer">Instagram</a>}
+        {catalog.facebook_url && <a href={catalog.facebook_url} target="_blank" rel="noreferrer">Facebook</a>}
+      </div>
+    </footer>}
     {selectedProduct && <div className="modal-backdrop" onClick={()=>setSelectedProduct(null)}><section className="product-modal" onClick={e=>e.stopPropagation()}><button className="modal-close" onClick={()=>setSelectedProduct(null)}>×</button><div className="modal-image">{publicImage(selectedProduct) ? <img src={publicImage(selectedProduct)} alt="" /> : <span>Sem foto</span>}</div><div className="modal-body"><span className="product-category">{categories.find(c=>c.id===selectedProduct.category_id)?.name || 'Produto'}</span><h2>{selectedProduct.name}</h2><p>{selectedProduct.description}</p><strong>{money(selectedProduct.price)}</strong><button className="primary-button" onClick={()=>addToCart(selectedProduct)}>Adicionar ao carrinho</button></div></section></div>}
     {checkoutOpen && <div className="modal-backdrop" onClick={()=>setCheckoutOpen(false)}><section className="checkout-modal" onClick={e=>e.stopPropagation()}><button className="modal-close" onClick={()=>setCheckoutOpen(false)}>×</button><span className="eyebrow">PEDIDO</span><h2>Seu carrinho</h2><div className="cart-list">{cart.map(i=><div className="cart-item" key={i.product.id}><div><strong>{i.product.name}</strong><span>{money(i.product.price)} cada</span></div><div className="qty"><button onClick={()=>changeQty(i.product.id,-1)}>−</button><b>{i.quantity}</b><button onClick={()=>changeQty(i.product.id,1)}>+</button></div></div>)}</div>{!cart.length ? <p className="muted">Seu carrinho está vazio.</p> : <><div className="cart-total"><span>Total</span><strong>{money(total)}</strong></div><form className="auth-form" onSubmit={submitOrder}><label>Nome<input required value={checkout.customer_name} onChange={e=>setCheckout({...checkout,customer_name:e.target.value})} /></label><label>Telefone / WhatsApp<input required value={checkout.phone} onChange={e=>setCheckout({...checkout,phone:e.target.value})} /></label><label>Endereço<textarea value={checkout.address} onChange={e=>setCheckout({...checkout,address:e.target.value})} placeholder="Opcional" /></label><label>Observações<textarea value={checkout.notes} onChange={e=>setCheckout({...checkout,notes:e.target.value})} placeholder="Opcional" /></label><label>Forma de pagamento<select value={checkout.payment_method} onChange={e=>setCheckout({...checkout,payment_method:e.target.value})}><option>A combinar</option><option>Pix</option><option>Dinheiro</option><option>Cartão</option></select></label>{message && <div className="form-message">{message}</div>}<button className="primary-button">Enviar pedido pelo WhatsApp</button></form></>}</section></div>}
   </main>;
