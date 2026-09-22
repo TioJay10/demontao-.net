@@ -506,7 +506,10 @@ function PublicCatalog({ slug }) {
   return <main className="public-catalog" style={themeStyle}>
     <header className="public-header">
       <div className="public-brand-area">{catalog.logo_url ? <img className="catalog-logo" src={catalog.logo_url} alt="" /> : null}<div><h1>{catalog.company_name}</h1><p>{catalog.description}</p></div></div>
-      <button className="cart-button" onClick={()=>setCheckoutOpen(true)}>Carrinho <span>{cart.reduce((n,i)=>n+i.quantity,0)}</span></button>
+      <div className="public-header-actions">
+        {catalog.whatsapp && <a className="catalog-whatsapp" href={'https://wa.me/' + catalog.whatsapp.replace(/\D/g,'')} target="_blank" rel="noreferrer">WhatsApp</a>}
+        <button className="cart-button" onClick={()=>setCheckoutOpen(true)}>Carrinho <span>{cart.reduce((n,i)=>n+i.quantity,0)}</span></button>
+      </div>
     </header>
     {catalog.cover_url && <div className="catalog-cover"><img src={catalog.cover_url} alt="" /></div>}
     <section className="public-content">
@@ -516,7 +519,7 @@ function PublicCatalog({ slug }) {
       {message && <div className="public-message">{message}</div>}
       <div className="product-grid">{filtered.map(p=><article className="public-product" key={p.id} onClick={()=>setSelectedProduct(p)}>
         <div className="public-product-image">{publicImage(p) ? <img src={publicImage(p)} alt="" /> : <span>Sem foto</span>}</div>
-        <div className="public-product-body"><span className="product-category">{categories.find(c=>c.id===p.category_id)?.name || 'Produto'}</span><h2>{p.name}</h2><p>{p.description}</p><strong>{money(p.price)}</strong></div>
+        <div className="public-product-body"><span className="product-category">{categories.find(c=>c.id===p.category_id)?.name || 'Produto'}</span><h2>{p.name}</h2><p>{p.description}</p><div className="product-card-footer"><strong>{money(p.price)}</strong><button type="button" className="product-add-button" onClick={e=>{e.stopPropagation();addToCart(p)}}>Adicionar</button></div></div>
       </article>)}</div>
       {!filtered.length && <div className="public-empty"><h2>Nenhum item encontrado</h2><p>Tente outra busca ou categoria.</p></div>}
     </section>
