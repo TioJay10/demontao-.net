@@ -111,6 +111,7 @@ function OwnerDashboard({ user, catalog, onLogout }) {
   const [editingProduct, setEditingProduct] = useState(null);
   const [productImage, setProductImage] = useState(null);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [brandUploading, setBrandUploading] = useState('');
   const [settings, setSettings] = useState({ company_name: catalog?.company_name || '', description: catalog?.description || '', whatsapp: catalog?.whatsapp || '', address: catalog?.address || '', hours: catalog?.hours || '', instagram_url: catalog?.instagram_url || '', facebook_url: catalog?.facebook_url || '', primary_color: catalog?.primary_color || '#111827', secondary_color: catalog?.secondary_color || '#6b7280', background_color: catalog?.background_color || '#f7f7f5', button_color: catalog?.button_color || '#111827', theme: catalog?.theme || 'Minimalista', logo_url: catalog?.logo_url || '', cover_url: catalog?.cover_url || '' });
   const [savingItem, setSavingItem] = useState(false);
   const [catalogError, setCatalogError] = useState('');
@@ -205,7 +206,7 @@ function OwnerDashboard({ user, catalog, onLogout }) {
     setUploadingImage(true); setCatalogError('');
     try {
       const ext = productImage.name.split('.').pop()?.toLowerCase() || 'jpg';
-      const path = `${catalog.id}/products/${editingProduct.id}/${crypto.randomUUID()}.${ext}`;
+      const path = `${user.id}/products/${editingProduct.id}/${crypto.randomUUID()}.${ext}`;
       const { error: uploadError } = await supabase.storage.from('catalog-images').upload(path, productImage, { contentType: productImage.type, upsert: false });
       if (uploadError) throw uploadError;
       const { data: publicData } = supabase.storage.from('catalog-images').getPublicUrl(path);
@@ -231,6 +232,41 @@ function OwnerDashboard({ user, catalog, onLogout }) {
     const nextImages = (editingProduct?.product_images || []).filter(item => item.id !== image.id);
     setEditingProduct(editingProduct ? { ...editingProduct, product_images: nextImages } : editingProduct);
     setProducts(products.map(item => item.id === image.product_id ? { ...item, product_images: nextImages } : item));
+  };
+
+  const uploadBrandImage = async (type, file) => {
+    if (!file || !currentCatalog?.id) return;
+    setBrandUploading(type); setCatalogError('');
+    try {
+      if (!['image/jpeg','image/png','image/webp'].includes(file.type)) throw new Error('Use JPG, PNG ou WEBP.');
+      if (file.size > 5 * 1024 * 1024) throw new Error('A imagem deve ter no máximo 5 MB.');
+      const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+      const path = user.id + '/brand/' + type + '-' + crypto.randomUUID() + '.' + ext;
+      const { error: uploadError } = await supabase.storage.from('catalog-images').upload(path, file, { contentType: file.type, upsert: false });
+      if (uploadError) throw uploadError;
+      const { data } = supabase.storage.from('catalog-images').getPublicUrl(path);
+      const field = type === 'logo' ? 'logo_url' : 'cover_url';
+      const { data: updated, error } = await supabase.from('catalogs').update({ [field]: data.publicUrl, updated_at: new Date().toISOString() }).eq('id', currentCatalog.id).select('*').single();
+      if (error) throw error;
+      setCurrentCatalog(updated); setSettings(prev => ({...prev, ...updated}));
+    } catch (error) { setCatalogError(error.message || 'Não foi possível enviar a imagem.'); }
+    finally { setBrandUploading(''); }
+  };
+
+  const removeBrandImage = async (type) => {
+    const field = type === 'logo' ? 'logo_url' : 'cover_url';
+    const url = currentCatalog?.[field];
+    if (!url) return;
+    setBrandUploading(type); setCatalogError('');
+    try {
+      const marker = '/catalog-images/';
+      const idx = url.indexOf(marker);
+      if (idx >= 0) await supabase.storage.from('catalog-images').remove([url.slice(idx + marker.length).split('?')[0]]);
+      const { data, error } = await supabase.from('catalogs').update({ [field]: null, updated_at: new Date().toISOString() }).eq('id', currentCatalog.id).select('*').single();
+      if (error) throw error;
+      setCurrentCatalog(data); setSettings(prev => ({...prev, ...data}));
+    } catch (error) { setCatalogError(error.message || 'Não foi possível remover a imagem.'); }
+    finally { setBrandUploading(''); }
   };
 
   const saveCatalogSettings = async (event) => {
@@ -359,6 +395,10 @@ function OwnerDashboard({ user, catalog, onLogout }) {
         <form onSubmit={saveCatalogSettings} className="auth-form">
           <label>Nome da empresa<input value={settings.company_name} onChange={e=>setSettings({...settings,company_name:e.target.value})} /></label>
           <label>Descrição<textarea value={settings.description} onChange={e=>setSettings({...settings,description:e.target.value})} maxLength={500} placeholder="Apresente sua empresa..." /></label>
+          <div className="brand-media-manager">
+            <div className="brand-media-card"><strong>Logo</strong>{settings.logo_url ? <img className="brand-preview logo-preview" src={settings.logo_url} alt="Logo da empresa" /> : <div className="brand-empty">Nenhuma logo</div>}<input type="file" accept="image/jpeg,image/png,image/webp" onChange={e=>uploadBrandImage('logo', e.target.files?.[0])} disabled={!!brandUploading}/>{settings.logo_url && <button type="button" className="danger-button" onClick={()=>removeBrandImage('logo')} disabled={!!brandUploading}>{brandUploading==='logo'?'Removendo...':'Remover logo'}</button>}</div>
+            <div className="brand-media-card"><strong>Capa</strong>{settings.cover_url ? <img className="brand-preview cover-preview" src={settings.cover_url} alt="Capa da empresa" /> : <div className="brand-empty">Nenhuma capa</div>}<input type="file" accept="image/jpeg,image/png,image/webp" onChange={e=>uploadBrandImage('cover', e.target.files?.[0])} disabled={!!brandUploading}/>{settings.cover_url && <button type="button" className="danger-button" onClick={()=>removeBrandImage('cover')} disabled={!!brandUploading}>{brandUploading==='cover'?'Removendo...':'Remover capa'}</button>}</div>
+          </div>
           <div className="form-two"><label>WhatsApp<input value={settings.whatsapp} onChange={e=>setSettings({...settings,whatsapp:e.target.value})} placeholder="5511999999999" /></label><label>Horário de atendimento<input value={settings.hours} onChange={e=>setSettings({...settings,hours:e.target.value})} placeholder="Seg a Sex · 9h às 18h" /></label></div>
           <label>Endereço<input value={settings.address} onChange={e=>setSettings({...settings,address:e.target.value})} placeholder="Rua, número, bairro, cidade - UF" /></label>
           <div className="form-two"><label>Instagram<input value={settings.instagram_url} onChange={e=>setSettings({...settings,instagram_url:e.target.value})} placeholder="https://instagram.com/..." /></label><label>Facebook<input value={settings.facebook_url} onChange={e=>setSettings({...settings,facebook_url:e.target.value})} placeholder="https://facebook.com/..." /></label></div>
