@@ -121,10 +121,10 @@ function OwnerDashboard({ user, catalog, onLogout }) {
       supabase.from('categories').select('*').eq('catalog_id', catalog.id).order('sort_order').order('created_at'),
       supabase.from('products').select('*, product_images(*)').eq('catalog_id', catalog.id).order('created_at', { ascending: false }),
       supabase.from('orders').select('*, order_items(*)').eq('catalog_id', catalog.id).order('created_at', { ascending: false })
-    ]).then(([cats, prods]) => {
+     ]).then(([cats, prods, ords]) => {
       if (cats.error) setCatalogError(cats.error.message); else setCategories(cats.data || []);
       if (prods.error) setCatalogError(prods.error.message); else setProducts(prods.data || []);
-      const ords = arguments[0]?.[2]; if (ords?.error) setCatalogError(ords.error.message); else if (ords) setOrders(ords.data || []);
+      if (ords?.error) setCatalogError(ords.error.message); else setOrders(ords?.data || []);
     });
   }, [catalog?.id]);
 
