@@ -104,6 +104,7 @@ function OwnerDashboard({ user, catalog, onLogout }) {
   const [tab, setTab] = useState('overview');
   const [categories, setCategories] = useState([]);
   const [products, setProducts] = useState([]);
+  const [orders, setOrders] = useState([]);
   const [categoryName, setCategoryName] = useState('');
   const emptyProductForm = { name: '', description: '', price: '', stock: '', category_id: '', status: 'active' };
   const [productForm, setProductForm] = useState(emptyProductForm);
@@ -118,12 +119,20 @@ function OwnerDashboard({ user, catalog, onLogout }) {
     if (!catalog?.id || !supabase) return;
     Promise.all([
       supabase.from('categories').select('*').eq('catalog_id', catalog.id).order('sort_order').order('created_at'),
-      supabase.from('products').select('*, product_images(*)').eq('catalog_id', catalog.id).order('created_at', { ascending: false })
+      supabase.from('products').select('*, product_images(*)').eq('catalog_id', catalog.id).order('created_at', { ascending: false }),
+      supabase.from('orders').select('*, order_items(*)').eq('catalog_id', catalog.id).order('created_at', { ascending: false })
     ]).then(([cats, prods]) => {
       if (cats.error) setCatalogError(cats.error.message); else setCategories(cats.data || []);
       if (prods.error) setCatalogError(prods.error.message); else setProducts(prods.data || []);
+      const ords = arguments[0]?.[2]; if (ords?.error) setCatalogError(ords.error.message); else if (ords) setOrders(ords.data || []);
     });
   }, [catalog?.id]);
+
+  const updateOrderStatus = async (id, status) => {
+    const { data, error } = await supabase.from('orders').update({ status, updated_at: new Date().toISOString() }).eq('id', id).select('*').single();
+    if (error) return setCatalogError(error.message);
+    setOrders(orders.map(order => order.id === id ? { ...order, ...data } : order));
+  };
 
   const addCategory = async (event) => {
     event.preventDefault();
@@ -280,6 +289,7 @@ function OwnerDashboard({ user, catalog, onLogout }) {
         <button className={tab==='overview'?'nav-item active':'nav-item'} onClick={()=>setTab('overview')}>Visão geral</button>
         <button className={tab==='categories'?'nav-item active':'nav-item'} onClick={()=>setTab('categories')}>Categorias</button>
         <button className={tab==='products'?'nav-item active':'nav-item'} onClick={()=>setTab('products')}>Produtos e serviços</button>
+        <button className={tab==='orders'?'nav-item active':'nav-item'} onClick={()=>setTab('orders')}>Pedidos {orders.length ? `(${orders.length})` : ''}</button>
         <button className={tab==='customize'?'nav-item active':'nav-item'} onClick={()=>setTab('customize')}>Personalizar catálogo</button>
       </nav>
       <div className="dashboard-intro"><span className="eyebrow">OLÁ</span><h1>{currentCatalog.company_name || 'Meu catálogo'}</h1><p>Seu painel para organizar o catálogo digital.</p></div>
@@ -321,6 +331,19 @@ function OwnerDashboard({ user, catalog, onLogout }) {
           </form>
         </article>
         <article className="panel"><span className="eyebrow">CADASTRADOS</span><h2>{products.length} item(ns)</h2><div className="item-list">{products.length===0?<p className="muted">Nenhum produto ou serviço cadastrado.</p>:products.map(item=><div className="catalog-item product-row" key={item.id}><div><strong>{item.name}</strong><span>{item.price != null ? `R$ ${Number(item.price).toFixed(2).replace('.', ',')}` : 'Preço não informado'} · {item.status==='active'?'Ativo':item.status==='inactive'?'Inativo':'Sem estoque'}</span></div><div className="row-actions"><button className="secondary-button" onClick={()=>editProduct(item)}>Editar</button><button className="danger-button" onClick={()=>deleteProduct(item.id)}>Excluir</button></div></div>)}</div></article>
+      {tab === 'orders' && <article className="panel orders-panel">
+        <span className="eyebrow">VENDAS</span><h2>Pedidos recebidos</h2>
+        {catalogError && <div className="form-message">{catalogError}</div>}
+        {orders.length === 0 ? <p className="muted">Nenhum pedido recebido ainda.</p> : <div className="orders-list">
+          {orders.map(order => <div className="order-card" key={order.id}>
+            <div className="order-head"><div><strong>Pedido #{order.id.slice(0,8)}</strong><span>{new Date(order.created_at).toLocaleString('pt-BR')}</span></div><strong>R$ {Number(order.total || 0).toFixed(2).replace('.', ',')}</strong></div>
+            <div className="order-customer"><strong>{order.customer_name}</strong><span>{order.phone}</span>{order.address && <span>{order.address}</span>}</div>
+            <div className="order-items">{(order.order_items || []).map((item, i) => <div key={i}><span>{item.quantity}× {item.product_name}</span><strong>R$ {(Number(item.unit_price||0)*item.quantity).toFixed(2).replace('.', ',')}</strong></div>)}</div>
+            {order.notes && <p className="order-notes"><strong>Obs.:</strong> {order.notes}</p>}
+            <div className="order-actions"><select value={order.status} onChange={e=>updateOrderStatus(order.id,e.target.value)}><option value="new">Novo</option><option value="in_analysis">Em análise</option><option value="confirmed">Confirmado</option><option value="completed">Concluído</option><option value="cancelled">Cancelado</option></select></div>
+          </div>)}
+        </div>}
+      </article>}
       {tab === 'customize' && <article className="panel customization-panel">
         <span className="eyebrow">IDENTIDADE</span><h2>Personalizar catálogo</h2>
         <form onSubmit={saveCatalogSettings} className="auth-form">
