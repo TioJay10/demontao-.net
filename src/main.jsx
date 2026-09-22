@@ -112,7 +112,7 @@ function OwnerDashboard({ user, catalog, onLogout }) {
   const [productImage, setProductImage] = useState(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [brandUploading, setBrandUploading] = useState('');
-  const [settings, setSettings] = useState({ company_name: catalog?.company_name || '', description: catalog?.description || '', whatsapp: catalog?.whatsapp || '', address: catalog?.address || '', hours: catalog?.hours || '', instagram_url: catalog?.instagram_url || '', facebook_url: catalog?.facebook_url || '', primary_color: catalog?.primary_color || '#111827', secondary_color: catalog?.secondary_color || '#6b7280', background_color: catalog?.background_color || '#f7f7f5', button_color: catalog?.button_color || '#111827', theme: catalog?.theme || 'minimalist', logo_url: catalog?.logo_url || '', cover_url: catalog?.cover_url || '' });
+  const [settings, setSettings] = useState({ company_name: catalog?.company_name || '', business_category: catalog?.business_category || 'Outros', description: catalog?.description || '', whatsapp: catalog?.whatsapp || '', address: catalog?.address || '', hours: catalog?.hours || '', instagram_url: catalog?.instagram_url || '', facebook_url: catalog?.facebook_url || '', primary_color: catalog?.primary_color || '#111827', secondary_color: catalog?.secondary_color || '#6b7280', background_color: catalog?.background_color || '#f7f7f5', button_color: catalog?.button_color || '#111827', theme: catalog?.theme || 'minimalist', logo_url: catalog?.logo_url || '', cover_url: catalog?.cover_url || '' });
   const [savingItem, setSavingItem] = useState(false);
   const [catalogError, setCatalogError] = useState('');
   const [qrOpen, setQrOpen] = useState(false);
@@ -272,6 +272,7 @@ function OwnerDashboard({ user, catalog, onLogout }) {
   const saveCatalogSettings = async (event) => {
     event.preventDefault(); setSaving(true); setMessage('');
     const payload = {
+      business_category: settings.business_category || 'Outros',
       company_name: settings.company_name.trim() || 'Meu catálogo',
       description: settings.description.trim() || null,
       whatsapp: settings.whatsapp.trim() || null,
@@ -393,6 +394,7 @@ function OwnerDashboard({ user, catalog, onLogout }) {
       {tab === 'customize' && <article className="panel customization-panel">
         <span className="eyebrow">IDENTIDADE</span><h2>Personalizar catálogo</h2>
         <form onSubmit={saveCatalogSettings} className="auth-form">
+          <label>Categoria do negócio<select value={settings.business_category} onChange={e=>setSettings({...settings,business_category:e.target.value})}><option>Alimentação</option><option>Moda</option><option>Beleza</option><option>Casa</option><option>Serviços</option><option>Eventos</option><option>Tecnologia</option><option>Saúde</option><option>Educação</option><option>Automotivo</option><option>Outros</option></select></label>
           <label>Nome da empresa<input value={settings.company_name} onChange={e=>setSettings({...settings,company_name:e.target.value})} /></label>
           <label>Descrição<textarea value={settings.description} onChange={e=>setSettings({...settings,description:e.target.value})} maxLength={500} placeholder="Apresente sua empresa..." /></label>
           <div className="brand-media-manager">
@@ -533,11 +535,12 @@ function HomePage({ onLogin }) {
   const [products, setProducts] = useState([]);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
+  const [category, setCategory] = useState('all');
 
   useEffect(() => {
     const load = async () => {
       const [{ data: catalogData }, { data: productData }] = await Promise.all([
-        supabase.from('catalogs').select('id,slug,company_name,description,logo_url,address,is_active').eq('is_active', true).order('created_at', { ascending: false }),
+        supabase.from('catalogs').select('id,slug,company_name,description,logo_url,address,business_category,is_active').eq('is_active', true).order('created_at', { ascending: false }),
         supabase.from('products').select('id,catalog_id,name,description,status').eq('status', 'active')
       ]);
       setCatalogs(catalogData || []);
@@ -552,9 +555,11 @@ function HomePage({ onLogin }) {
     return q && ((p.name || '').toLowerCase().includes(q) || (p.description || '').toLowerCase().includes(q));
   }).map(p => p.catalog_id));
 
+  const categories = ['all','Alimentação','Moda','Beleza','Casa','Serviços','Eventos','Tecnologia','Saúde','Educação','Automotivo','Outros'];
+
   const filtered = catalogs.filter(c => {
     const q = query.trim().toLowerCase();
-    return !q ||
+    return (category === 'all' || c.business_category === category) && (!q ||
       (c.company_name || '').toLowerCase().includes(q) ||
       (c.description || '').toLowerCase().includes(q) ||
       (c.address || '').toLowerCase().includes(q) ||
@@ -570,6 +575,7 @@ function HomePage({ onLogin }) {
       <div className="home-hero-card"><strong>DEMONTAO.NET</strong><span>Seu catálogo. Seu negócio. Seu cliente.</span></div>
     </section>
     <section className="content home-content">
+      <div className="home-category-filter">{categories.map(item => <button key={item} type="button" className={category === item ? 'active' : ''} onClick={()=>setCategory(item)}>{item === 'all' ? 'Todos' : item}</button>)}</div>
       <div className="section-heading"><div><span className="eyebrow">EXPLORAR</span><h2>{query.trim() ? 'Resultados da busca' : 'Catálogos disponíveis'}</h2></div><span className="catalog-count">{filtered.length} {filtered.length === 1 ? 'catálogo' : 'catálogos'}</span></div>
       {loading ? <div className="empty-state"><h3>Carregando catálogos...</h3></div> : filtered.length ? <div className="catalog-grid">{filtered.map(c => <a className="catalog-card" key={c.id} href={'/' + c.slug}>
         <div className="catalog-card-logo">{c.logo_url ? <img src={c.logo_url} alt="" /> : <span>{c.company_name?.charAt(0).toUpperCase()}</span>}</div>
